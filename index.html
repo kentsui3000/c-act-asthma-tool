@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>氣喘控制測驗 C-ACT / ACT｜黑眼圈奶爸 Dr. 徐嘉賢醫師</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #FFB640;
+      --primary: #47607A;
+      --dark: #002840;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --soft-bg: #f5f9fc;
+      --card-bg: #ffffff;
+      --text: var(--dark);
+      --text-muted: var(--primary);
+      --radius: 16px;
+      --shadow: 0 4px 20px rgba(0,40,64,0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: linear-gradient(160deg, rgba(255,182,64,0.12) 0%, rgba(71,96,122,0.1) 50%, rgba(0,40,64,0.06) 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px 16px 48px;
+      color: var(--text);
+    }
+    .container { max-width: 560px; margin: 0 auto; }
+    .clinic-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding: 14px 18px;
+      background: var(--dark);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .clinic-name {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .clinic-name span { color: rgba(255,255,255,0.85); font-weight: 500; }
+    .cta-book {
+      display: inline-block;
+      padding: 10px 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: inherit;
+      color: var(--dark);
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: box-shadow 0.2s, filter 0.2s;
+    }
+    .cta-book:hover { box-shadow: 0 4px 14px rgba(255,182,64,0.5); filter: brightness(1.05); }
+    header { text-align: center; margin-bottom: 20px; }
+    .logo { font-size: 1.1rem; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
+    h1 { font-size: 1.5rem; font-weight: 700; color: var(--text); margin: 0 0 8px; }
+    .sub { font-size: 0.9rem; color: var(--text-muted); }
+
+    .mode-selector {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      background: var(--card-bg);
+      padding: 12px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 14px 16px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      font-family: inherit;
+      border: 2px solid rgba(71,96,122,0.25);
+      border-radius: 12px;
+      background: rgba(71,96,122,0.04);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-btn:hover { border-color: var(--primary); background: rgba(71,96,122,0.08); }
+    .mode-btn.active { border-color: var(--primary); background: rgba(71,96,122,0.15); color: var(--primary); }
+
+    .weather-card {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--dark) 100%);
+      color: white;
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+    .weather-card h3 { margin: 0 0 10px; font-size: 1rem; opacity: 0.95; }
+    .weather-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 10px; }
+    .weather-item { font-size: 1.1rem; }
+    .weather-item span { opacity: 0.9; font-size: 0.85rem; margin-right: 4px; }
+    .weather-suggestion {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.3);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .weather-loading { opacity: 0.8; }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card.kid { border-left: 4px solid var(--accent); }
+    .card.parent { border-left: 4px solid var(--primary); }
+    .card.adult { border-left: 4px solid var(--dark); }
+    .step-label {
+      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-muted); margin-bottom: 12px;
+    }
+    .question { font-weight: 500; margin-bottom: 14px; line-height: 1.5; }
+    .options { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .option {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px;
+      border: 2px solid rgba(71,96,122,0.2);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(71,96,122,0.03);
+    }
+    .option:hover { border-color: var(--primary); background: rgba(71,96,122,0.06); }
+    .option.selected { border-color: var(--primary); background: rgba(71,96,122,0.12); }
+    .option input { display: none; }
+    .emoji { font-size: 1.8rem; }
+    .option-text { font-size: 0.95rem; }
+    .btn {
+      display: block; width: 100%;
+      padding: 14px 24px;
+      font-size: 1rem; font-weight: 500; font-family: inherit;
+      border: none; border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #e5a030);
+      color: var(--dark);
+      margin-top: 8px;
+    }
+    .btn-primary:hover { box-shadow: 0 6px 20px rgba(255,182,64,0.45); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .score-box {
+      text-align: center;
+      padding: 28px 20px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+    }
+    .score-box.good { background: #dcfce7; border: 2px solid var(--green); }
+    .score-box.partial { background: #fef9c3; border: 2px solid var(--yellow); }
+    .score-box.poor { background: #fee2e2; border: 2px solid var(--red); }
+    .score-label { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 4px; }
+    .score-value { font-size: 2.5rem; font-weight: 700; }
+    .score-box.good .score-value { color: #166534; }
+    .score-box.partial .score-value { color: #854d0e; }
+    .score-box.poor .score-value { color: #991b1b; }
+    .score-desc { font-size: 1rem; margin-top: 8px; font-weight: 500; }
+    .email-gate {
+      background: rgba(71,96,122,0.04);
+      border: 2px dashed rgba(71,96,122,0.3);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .email-gate label { display: block; font-weight: 500; margin-bottom: 8px; }
+    .email-gate input {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 1rem;
+      border: 2px solid rgba(71,96,122,0.25);
+      border-radius: 10px;
+      font-family: inherit;
+    }
+    .email-gate input:focus { outline: none; border-color: var(--primary); }
+    .email-gate .field { margin-bottom: 14px; }
+    .email-gate .field label { display: block; font-weight: 500; margin-bottom: 6px; }
+    .consent-box {
+      margin: 16px 0;
+      padding: 14px;
+      background: rgba(71,96,122,0.06);
+      border-radius: 10px;
+      border: 1px solid rgba(71,96,122,0.2);
+    }
+    .consent-box label {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      cursor: pointer;
+      font-weight: 400;
+    }
+    .consent-box input[type="checkbox"] {
+      margin-top: 4px;
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+    }
+    .consent-box .consent-text {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.9rem;
+      color: var(--text);
+      line-height: 1.55;
+      word-wrap: break-word;
+    }
+    .pdf-note { font-size: 0.85rem; color: var(--text-muted); margin-top: 10px; }
+    .print-only { display: none; }
+    .hidden { display: none !important; }
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+    .start-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px 24px;
+      margin-bottom: 20px;
+    }
+    .start-card .field { margin-bottom: 20px; }
+    .start-card .field label { display: block; font-weight: 500; margin-bottom: 8px; }
+    .start-card select {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 1rem;
+      border: 2px solid rgba(71,96,122,0.25);
+      border-radius: 10px;
+      font-family: inherit;
+      background: #fff;
+    }
+    .start-card select:focus { outline: none; border-color: var(--primary); }
+    .start-card input {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 1rem;
+      border: 2px solid rgba(71,96,122,0.25);
+      border-radius: 10px;
+      font-family: inherit;
+    }
+    .start-card input:focus { outline: none; border-color: var(--primary); }
+    .btn-row { display: flex; gap: 12px; margin-top: 24px; }
+    .btn-row .btn { flex: 1; }
+    .btn-secondary {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-secondary:hover { background: var(--dark); }
+    @media print {
+      body { background: white; padding: 16px; }
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      .card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .score-box { break-inside: avoid; }
+    }
+    .brand-print {
+      text-align: center;
+      padding: 16px 0;
+      border-bottom: 2px solid #e2e8f0;
+      margin-bottom: 20px;
+    }
+    .brand-print .name { font-size: 1.2rem; font-weight: 700; }
+    .brand-print .link { font-size: 0.9rem; color: var(--primary); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="clinic-top no-print">
+      <div class="clinic-name">徐嘉賢診所—過敏性氣喘 <span>| 胸腔專科診所</span></div>
+      <a href="https://08143.vision.com.tw/Register" target="_blank" rel="noopener noreferrer" class="cta-book">線上掛號</a>
+    </div>
+    <header class="no-print">
+      <p class="logo">黑眼圈奶爸 Dr. 徐嘉賢醫師</p>
+      <h1>氣喘控制測驗</h1>
+      <p class="sub">兒童 C-ACT（4～11 歲）／成人 ACT（12 歲以上）</p>
+    </header>
+
+    <!-- 第一頁：姓名 + 年齡 -->
+    <div id="page-start" class="page-section active no-print">
+      <div class="start-card">
+        <div class="field">
+          <label for="start-name">姓名 <span style="color: var(--red);">*</span></label>
+          <input type="text" id="start-name" placeholder="請輸入姓名" required autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="start-age">年齡區間 <span style="color: var(--red);">*</span></label>
+          <select id="start-age" required>
+            <option value="">請選擇</option>
+            <option value="child">4～11 歲（兒童 C-ACT）</option>
+            <option value="adult">12 歲以上（成人 ACT）</option>
+          </select>
+        </div>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 8px;">選擇年齡後將自動顯示對應測驗，避免選錯。</p>
+        <button type="button" class="btn btn-primary" id="btn-start-quiz" style="margin-top: 20px;">開始測驗</button>
+      </div>
+    </div>
+
+    <!-- 第二頁：測驗 -->
+    <div id="page-quiz" class="page-section no-print">
+      <div class="btn-row" style="margin-bottom: 16px;">
+        <button type="button" class="btn btn-secondary" id="btn-back-to-start">← 上一步（修改姓名／年齡）</button>
+      </div>
+      <div id="weather-card" class="weather-card">
+        <h3>🌤 高雄今日天氣與建議</h3>
+        <div id="weather-content" class="weather-loading">正在取得天氣…</div>
+        <div id="weather-suggestion" class="weather-suggestion hidden"></div>
+      </div>
+
+      <div id="cact-section">
+        <p style="text-align:center; color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">請由小朋友先回答前 4 題（可點選表情），再由家長回答後 3 題。</p>
+        <div class="card kid">
+          <div class="step-label">👶 小朋友回答（第 1～4 題）</div>
+          <div class="question" data-q="1">1. 今天你氣喘的狀況怎樣？</div>
+          <div class="options" data-name="q1">
+            <label class="option"><input type="radio" name="q1" value="0"><span class="emoji">😫</span><span class="option-text">非常不好</span></label>
+            <label class="option"><input type="radio" name="q1" value="1"><span class="emoji">😕</span><span class="option-text">不好</span></label>
+            <label class="option"><input type="radio" name="q1" value="2"><span class="emoji">🙂</span><span class="option-text">好</span></label>
+            <label class="option"><input type="radio" name="q1" value="3"><span class="emoji">😊</span><span class="option-text">非常好</span></label>
+          </div>
+        </div>
+        <div class="card kid">
+          <div class="question" data-q="2">2. 當你跑步、運動或玩耍時，氣喘對你造成的問題有多大？</div>
+          <div class="options" data-name="q2">
+            <label class="option"><input type="radio" name="q2" value="0"><span class="emoji">😫</span><span class="option-text">大問題，沒辦法做我想做的</span></label>
+            <label class="option"><input type="radio" name="q2" value="1"><span class="emoji">😕</span><span class="option-text">是個問題，不喜歡</span></label>
+            <label class="option"><input type="radio" name="q2" value="2"><span class="emoji">🙂</span><span class="option-text">有一點問題但還好</span></label>
+            <label class="option"><input type="radio" name="q2" value="3"><span class="emoji">😊</span><span class="option-text">不會造成問題</span></label>
+          </div>
+        </div>
+        <div class="card kid">
+          <div class="question" data-q="3">3. 你會因為氣喘而咳嗽嗎？</div>
+          <div class="options" data-name="q3">
+            <label class="option"><input type="radio" name="q3" value="0"><span class="emoji">😫</span><span class="option-text">會，一直都是</span></label>
+            <label class="option"><input type="radio" name="q3" value="1"><span class="emoji">😕</span><span class="option-text">會，常常</span></label>
+            <label class="option"><input type="radio" name="q3" value="2"><span class="emoji">🙂</span><span class="option-text">會，有時</span></label>
+            <label class="option"><input type="radio" name="q3" value="3"><span class="emoji">😊</span><span class="option-text">從來不會</span></label>
+          </div>
+        </div>
+        <div class="card kid">
+          <div class="question" data-q="4">4. 你會因為氣喘在晚上醒來嗎？</div>
+          <div class="options" data-name="q4">
+            <label class="option"><input type="radio" name="q4" value="0"><span class="emoji">😫</span><span class="option-text">會，一直都是</span></label>
+            <label class="option"><input type="radio" name="q4" value="1"><span class="emoji">😕</span><span class="option-text">會，常常</span></label>
+            <label class="option"><input type="radio" name="q4" value="2"><span class="emoji">🙂</span><span class="option-text">會，有時</span></label>
+            <label class="option"><input type="radio" name="q4" value="3"><span class="emoji">😊</span><span class="option-text">從來不會</span></label>
+          </div>
+        </div>
+        <div class="card parent">
+          <div class="step-label">👨‍👩‍👧 家長回答（第 5～7 題）</div>
+          <div class="question" data-q="5">5. 在過去 4 週內，平均有幾天您的小孩在「白天」出現氣喘症狀？</div>
+          <div class="options" data-name="q5">
+            <label class="option"><input type="radio" name="q5" value="0"><span class="option-text">幾乎每天（22～28 天）</span></label>
+            <label class="option"><input type="radio" name="q5" value="1"><span class="option-text">15～21 天</span></label>
+            <label class="option"><input type="radio" name="q5" value="2"><span class="option-text">8～14 天</span></label>
+            <label class="option"><input type="radio" name="q5" value="3"><span class="option-text">4～7 天</span></label>
+            <label class="option"><input type="radio" name="q5" value="4"><span class="option-text">1～3 天</span></label>
+            <label class="option"><input type="radio" name="q5" value="5"><span class="option-text">沒有</span></label>
+          </div>
+        </div>
+        <div class="card parent">
+          <div class="question" data-q="6">6. 在過去 4 週內，平均有幾天您的小孩在白天因氣喘而「發出哮喘聲」？</div>
+          <div class="options" data-name="q6">
+            <label class="option"><input type="radio" name="q6" value="0"><span class="option-text">幾乎每天</span></label>
+            <label class="option"><input type="radio" name="q6" value="1"><span class="option-text">15～21 天</span></label>
+            <label class="option"><input type="radio" name="q6" value="2"><span class="option-text">8～14 天</span></label>
+            <label class="option"><input type="radio" name="q6" value="3"><span class="option-text">4～7 天</span></label>
+            <label class="option"><input type="radio" name="q6" value="4"><span class="option-text">1～3 天</span></label>
+            <label class="option"><input type="radio" name="q6" value="5"><span class="option-text">沒有</span></label>
+          </div>
+        </div>
+        <div class="card parent">
+          <div class="question" data-q="7">7. 在過去 4 週內，平均有幾天您的小孩在「夜間」因氣喘（夜咳等）而醒來？</div>
+          <div class="options" data-name="q7">
+            <label class="option"><input type="radio" name="q7" value="0"><span class="option-text">幾乎每天</span></label>
+            <label class="option"><input type="radio" name="q7" value="1"><span class="option-text">15～21 天</span></label>
+            <label class="option"><input type="radio" name="q7" value="2"><span class="option-text">8～14 天</span></label>
+            <label class="option"><input type="radio" name="q7" value="3"><span class="option-text">4～7 天</span></label>
+            <label class="option"><input type="radio" name="q7" value="4"><span class="option-text">1～3 天</span></label>
+            <label class="option"><input type="radio" name="q7" value="5"><span class="option-text">沒有</span></label>
+          </div>
+        </div>
+      </div>
+
+      <div id="act-section" class="hidden">
+        <p style="text-align:center; color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">請根據過去 4 週的實際狀況作答（每題選一個）。</p>
+        <div class="card adult">
+          <div class="question">1. 在過去 4 週，氣喘有多少時候妨礙您在工作、上學或在家的工作量？</div>
+          <div class="options" data-name="a1">
+            <label class="option"><input type="radio" name="a1" value="1"><span class="option-text">所有時候</span></label>
+            <label class="option"><input type="radio" name="a1" value="2"><span class="option-text">大部分時候</span></label>
+            <label class="option"><input type="radio" name="a1" value="3"><span class="option-text">有些時候</span></label>
+            <label class="option"><input type="radio" name="a1" value="4"><span class="option-text">很少時候</span></label>
+            <label class="option"><input type="radio" name="a1" value="5"><span class="option-text">完全沒有</span></label>
+          </div>
+        </div>
+        <div class="card adult">
+          <div class="question">2. 在過去 4 週，您有多常感到呼吸急促？</div>
+          <div class="options" data-name="a2">
+            <label class="option"><input type="radio" name="a2" value="1"><span class="option-text">一天超過一次</span></label>
+            <label class="option"><input type="radio" name="a2" value="2"><span class="option-text">一天一次</span></label>
+            <label class="option"><input type="radio" name="a2" value="3"><span class="option-text">一週 3～6 次</span></label>
+            <label class="option"><input type="radio" name="a2" value="4"><span class="option-text">一週 1～2 次</span></label>
+            <label class="option"><input type="radio" name="a2" value="5"><span class="option-text">完全沒有</span></label>
+          </div>
+        </div>
+        <div class="card adult">
+          <div class="question">3. 在過去 4 週，氣喘症狀（喘鳴、咳嗽、呼吸急促、胸悶）有多常讓您在夜間或清晨提早醒來？</div>
+          <div class="options" data-name="a3">
+            <label class="option"><input type="radio" name="a3" value="1"><span class="option-text">一週 4 晚以上</span></label>
+            <label class="option"><input type="radio" name="a3" value="2"><span class="option-text">一週 2～3 晚</span></label>
+            <label class="option"><input type="radio" name="a3" value="3"><span class="option-text">一週一次</span></label>
+            <label class="option"><input type="radio" name="a3" value="4"><span class="option-text">1～2 次</span></label>
+            <label class="option"><input type="radio" name="a3" value="5"><span class="option-text">完全沒有</span></label>
+          </div>
+        </div>
+        <div class="card adult">
+          <div class="question">4. 在過去 4 週，您有多常使用急救吸入劑或霧化藥物（如 albuterol）？</div>
+          <div class="options" data-name="a4">
+            <label class="option"><input type="radio" name="a4" value="1"><span class="option-text">一天 3 次以上</span></label>
+            <label class="option"><input type="radio" name="a4" value="2"><span class="option-text">一天 1～2 次</span></label>
+            <label class="option"><input type="radio" name="a4" value="3"><span class="option-text">一週 2～3 次</span></label>
+            <label class="option"><input type="radio" name="a4" value="4"><span class="option-text">一週一次或更少</span></label>
+            <label class="option"><input type="radio" name="a4" value="5"><span class="option-text">完全沒有</span></label>
+          </div>
+        </div>
+        <div class="card adult">
+          <div class="question">5. 您如何評估過去 4 週的氣喘控制情況？</div>
+          <div class="options" data-name="a5">
+            <label class="option"><input type="radio" name="a5" value="1"><span class="option-text">完全沒控制</span></label>
+            <label class="option"><input type="radio" name="a5" value="2"><span class="option-text">控制很差</span></label>
+            <label class="option"><input type="radio" name="a5" value="3"><span class="option-text">有些控制</span></label>
+            <label class="option"><input type="radio" name="a5" value="4"><span class="option-text">控制良好</span></label>
+            <label class="option"><input type="radio" name="a5" value="5"><span class="option-text">完全控制</span></label>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-primary" id="submit-btn">看結果</button>
+    </div>
+
+    <!-- 第三頁：結果 -->
+    <div id="page-result" class="page-section no-print">
+      <div class="btn-row" style="margin-bottom: 16px;">
+        <button type="button" class="btn btn-secondary" id="btn-back-to-quiz">← 上一步（修改答案）</button>
+      </div>
+      <div class="card no-print">
+        <p id="result-greeting" style="font-size: 1rem; margin-bottom: 12px;"></p>
+        <div id="score-display" class="score-box">
+          <div class="score-label" id="score-label">—</div>
+          <div class="score-value" id="score-num">—</div>
+          <div class="score-desc" id="score-desc">—</div>
+        </div>
+        <p id="score-detail" style="font-size: 0.95rem; color: var(--text-muted); margin-top: 12px;"></p>
+      </div>
+
+      <p id="auto-save-status" style="font-size: 0.9rem; margin-top: 16px; color: var(--text-muted);"></p>
+
+      <div class="email-gate no-print" style="margin-top: 24px;">
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;">（選填）若需將報告寄至 Email，請填寫以下資料：</p>
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="您的 Email" autocomplete="email">
+        </div>
+        <div class="consent-box">
+          <label class="consent-label">
+            <input type="checkbox" id="consent" aria-describedby="consent-desc">
+            <span id="consent-desc" class="consent-text">我同意診所將氣喘控制測驗報告寄至上述 Email，並同意診所於日後以該 Email 寄送衛教、活動或相關資訊給我。</span>
+          </label>
+        </div>
+        <p class="pdf-note">送出後報告將自動寄至您的 Email，並記錄至診所 Google 試算表供追蹤。</p>
+        <button type="button" class="btn btn-primary" id="submit-report" style="margin-top: 12px;">送出並寄送報告至 Email</button>
+        <p id="sheet-status" style="font-size: 0.85rem; margin-top: 8px; color: var(--text-muted);"></p>
+      </div>
+
+      <div class="print-only" id="pdf-content" style="display: none;">
+        <div class="brand-print">
+          <div class="name">黑眼圈奶爸 Dr. 徐嘉賢醫師</div>
+          <div class="link">預約諮詢與門診資訊請見診所官方管道</div>
+        </div>
+        <div class="card">
+          <div id="print-score-box" class="score-box">
+            <div class="score-label" id="print-score-label">—</div>
+            <div class="score-value" id="print-score-num">—</div>
+            <div class="score-desc" id="print-score-desc">—</div>
+          </div>
+          <p id="print-detail" style="font-size: 0.95rem; color: var(--text-muted); margin-top: 12px;"></p>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 24px;">本結果僅供參考，建議與醫師討論後續照護計畫。© 黑眼圈奶爸 Dr. 徐嘉賢醫師</p>
+      </div>
+
+      <button type="button" class="btn btn-secondary no-print" id="back-btn" style="margin-top: 16px; background: var(--dark);">再測一次（回到第一頁）</button>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      // ═══ 設定：請換成您的 Google Apps Script 網路應用程式網址 ═══
+      var GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyK3AanqxlBZcmmOwt3boAtxHY-anpRnBW3g5Dq3HSCSrSuI3LBCgffHk9e4Y4tvLmiKA/exec'; // 例：'https://script.google.com/macros/s/xxxxx/exec'
+
+      var pageStart = document.getElementById('page-start');
+      var pageQuiz = document.getElementById('page-quiz');
+      var pageResult = document.getElementById('page-result');
+      var startNameInput = document.getElementById('start-name');
+      var startAgeSelect = document.getElementById('start-age');
+      var btnStartQuiz = document.getElementById('btn-start-quiz');
+      var btnBackToStart = document.getElementById('btn-back-to-start');
+      var btnBackToQuiz = document.getElementById('btn-back-to-quiz');
+      var cactSection = document.getElementById('cact-section');
+      var actSection = document.getElementById('act-section');
+      var submitBtn = document.getElementById('submit-btn');
+      var resultGreeting = document.getElementById('result-greeting');
+      var scoreDisplay = document.getElementById('score-display');
+      var scoreNum = document.getElementById('score-num');
+      var scoreDesc = document.getElementById('score-desc');
+      var scoreDetail = document.getElementById('score-detail');
+      var scoreLabel = document.getElementById('score-label');
+      var emailInput = document.getElementById('email');
+      var consentCheckbox = document.getElementById('consent');
+      var submitReportBtn = document.getElementById('submit-report');
+      var autoSaveStatus = document.getElementById('auto-save-status');
+      var backBtn = document.getElementById('back-btn');
+      var sheetStatus = document.getElementById('sheet-status');
+
+      var currentMode = 'child';
+      var startName = '';
+      var startAgeGroup = '';
+      var lastScore = 0;
+      var lastLevel = {};
+      var lastTestType = 'C-ACT';
+      var weatherData = { temp: null, humidity: null, suggestion: '' };
+
+      function showPage(page) {
+        pageStart.classList.remove('active');
+        pageQuiz.classList.remove('active');
+        pageResult.classList.remove('active');
+        page.classList.add('active');
+      }
+
+      btnStartQuiz.addEventListener('click', function() {
+        var name = (startNameInput.value || '').trim();
+        var age = startAgeSelect.value;
+        if (!name) {
+          alert('請輸入姓名。');
+          startNameInput.focus();
+          return;
+        }
+        if (!age) {
+          alert('請選擇年齡區間。');
+          startAgeSelect.focus();
+          return;
+        }
+        startName = name;
+        startAgeGroup = age;
+        currentMode = age;
+        cactSection.classList.toggle('hidden', age !== 'child');
+        actSection.classList.toggle('hidden', age !== 'adult');
+        showPage(pageQuiz);
+      });
+
+      btnBackToStart.addEventListener('click', function() {
+        document.querySelectorAll('input[type="radio"]').forEach(function(r) { r.checked = false; });
+        document.querySelectorAll('.option').forEach(function(o) { o.classList.remove('selected'); });
+        showPage(pageStart);
+      });
+
+      function loadWeather() {
+        var url = 'https://api.open-meteo.com/v1/forecast?latitude=22.6273&longitude=120.3014&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FTaipei';
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var cur = data.current;
+            var temp = Math.round(cur.temperature_2m);
+            var hum = cur.relative_humidity_2m;
+            weatherData.temp = temp;
+            weatherData.humidity = hum;
+            var suggestions = [];
+            if (hum >= 75) {
+              suggestions.push('今日濕度較高（' + hum + '%），塵蟎與黴菌較易滋生，建議除濕、保持通風，過敏與氣喘患者請留意環境。');
+            } else if (hum >= 60) {
+              suggestions.push('濕度適中偏高，若為塵蟎過敏可注意寢具清潔與除濕。');
+            }
+            if (temp >= 32) {
+              suggestions.push('氣溫較高，戶外活動請注意補充水分、避免長時間曝曬。');
+            } else if (temp <= 18) {
+              suggestions.push('早晚偏涼，注意保暖，冷空氣可能誘發氣喘，外出可戴口罩。');
+            }
+            if (suggestions.length === 0) {
+              suggestions.push('今日天氣對氣喘病友較為友善，請持續規律用藥與追蹤。');
+            }
+            weatherData.suggestion = suggestions.join(' ');
+            document.getElementById('weather-content').innerHTML =
+              '<div class="weather-row">' +
+              '<span class="weather-item"><span>溫度</span>' + temp + '°C</span>' +
+              '<span class="weather-item"><span>濕度</span>' + hum + '%</span>' +
+              '</div>';
+            document.getElementById('weather-content').classList.remove('weather-loading');
+            var sugEl = document.getElementById('weather-suggestion');
+            sugEl.textContent = '💡 ' + weatherData.suggestion;
+            sugEl.classList.remove('hidden');
+          })
+          .catch(function() {
+            document.getElementById('weather-content').innerHTML = '無法取得天氣，請稍後再試。';
+            document.getElementById('weather-content').classList.remove('weather-loading');
+          });
+      }
+      loadWeather();
+
+      function getCactTotal() {
+        var total = 0;
+        for (var i = 1; i <= 7; i++) {
+          var r = document.querySelector('input[name="q' + i + '"]:checked');
+          if (r) total += parseInt(r.value, 10);
+        }
+        return total;
+      }
+      function getActTotal() {
+        var total = 0;
+        for (var i = 1; i <= 5; i++) {
+          var r = document.querySelector('input[name="a' + i + '"]:checked');
+          if (r) total += parseInt(r.value, 10);
+        }
+        return total;
+      }
+      function allCactAnswered() {
+        for (var i = 1; i <= 7; i++) {
+          if (!document.querySelector('input[name="q' + i + '"]:checked')) return false;
+        }
+        return true;
+      }
+      function allActAnswered() {
+        for (var i = 1; i <= 5; i++) {
+          if (!document.querySelector('input[name="a' + i + '"]:checked')) return false;
+        }
+        return true;
+      }
+
+      function getLevelChild(score) {
+        if (score >= 20) return { level: 'good', label: '控制良好', emoji: '🟢', desc: '氣喘控制得不錯！請持續規律用藥與追蹤。' };
+        if (score >= 13) return { level: 'partial', label: '部分控制', emoji: '🟡', desc: '仍有改善空間，建議與醫師討論是否調整治療。' };
+        return { level: 'poor', label: '控制不佳', emoji: '🔴', desc: '建議儘早回診，與醫師一起擬定更好的控制計畫。' };
+      }
+      function getLevelAdult(score) {
+        if (score >= 20) return { level: 'good', label: '控制良好', emoji: '🟢', desc: '氣喘控制良好，請持續規律用藥與追蹤。' };
+        if (score >= 16) return { level: 'partial', label: '未完全控制', emoji: '🟡', desc: '建議與醫師討論是否調整治療。' };
+        return { level: 'poor', label: '控制不佳', emoji: '🔴', desc: '建議儘早回診，與醫師擬定更好的控制計畫。' };
+      }
+
+      function updateResult(score, level, testType, scoreRange) {
+        lastScore = score;
+        lastLevel = level;
+        lastTestType = testType;
+        scoreDisplay.className = 'score-box ' + level.level;
+        scoreLabel.textContent = testType + ' 總分（' + scoreRange + '）';
+        scoreNum.textContent = score;
+        scoreDesc.textContent = level.emoji + ' ' + level.label + '：' + level.desc;
+        scoreDetail.textContent = '本測驗僅供參考，請與醫師討論後續照護。';
+
+        document.getElementById('print-score-box').className = 'score-box ' + level.level;
+        document.getElementById('print-score-label').textContent = scoreLabel.textContent;
+        document.getElementById('print-score-num').textContent = score;
+        document.getElementById('print-score-desc').textContent = scoreDesc.textContent;
+        document.getElementById('print-detail').textContent = scoreDetail.textContent;
+      }
+
+      submitBtn.addEventListener('click', function() {
+        var score, level, testType, scoreRange;
+        if (currentMode === 'child') {
+          if (!allCactAnswered()) {
+            alert('請完成全部 7 題後再看結果。');
+            return;
+          }
+          score = getCactTotal();
+          level = getLevelChild(score);
+          testType = 'C-ACT';
+          scoreRange = '滿分 27';
+        } else {
+          if (!allActAnswered()) {
+            alert('請完成全部 5 題後再看結果。');
+            return;
+          }
+          score = getActTotal();
+          level = getLevelAdult(score);
+          testType = 'ACT';
+          scoreRange = '滿分 25';
+        }
+        resultGreeting.textContent = startName + ' 您好，以下是您的測驗結果：';
+        showPage(pageResult);
+        updateResult(score, level, testType, scoreRange);
+        autoSaveStatus.textContent = '正在儲存至診所試算表…';
+        autoSaveStatus.style.color = '';
+        saveToSheet(function(ok, msg) {
+          if (ok) {
+            autoSaveStatus.textContent = '已自動儲存至診所 Google 試算表。';
+            autoSaveStatus.style.color = 'var(--green)';
+          } else {
+            autoSaveStatus.textContent = msg || '儲存失敗，請檢查設定。';
+            autoSaveStatus.style.color = 'var(--red)';
+          }
+        });
+      });
+
+      btnBackToQuiz.addEventListener('click', function() {
+        showPage(pageQuiz);
+      });
+
+      document.querySelectorAll('.option').forEach(function(el) {
+        el.addEventListener('click', function() {
+          var name = this.querySelector('input').name;
+          document.querySelectorAll('.options[data-name="' + name + '"] .option').forEach(function(o) { o.classList.remove('selected'); });
+          this.classList.add('selected');
+        });
+      });
+      document.querySelectorAll('input[type="radio"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+          var opt = this.closest('.option');
+          if (opt) opt.classList.add('selected');
+        });
+      });
+
+      function saveToSheet(callback) {
+        if (!GOOGLE_SCRIPT_URL || !GOOGLE_SCRIPT_URL.trim()) {
+          if (callback) callback(false, '尚未設定 Google 試算表網址');
+          return;
+        }
+        var base = GOOGLE_SCRIPT_URL.split('?')[0];
+        var params = {
+          action: 'finish',
+          name: startName,
+          ageGroup: startAgeGroup,
+          testType: lastTestType,
+          score: String(lastScore),
+          level: lastLevel.label,
+          levelKey: lastLevel.level,
+          timestamp: new Date().toISOString(),
+          temp: weatherData.temp != null ? String(weatherData.temp) : '',
+          humidity: weatherData.humidity != null ? String(weatherData.humidity) : '',
+          weatherSuggestion: (weatherData.suggestion || '').substring(0, 300)
+        };
+        var iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.name = 'sheetSubmit';
+        document.body.appendChild(iframe);
+        var form = document.createElement('form');
+        form.method = 'GET';
+        form.target = 'sheetSubmit';
+        form.action = base;
+        Object.keys(params).forEach(function(k) {
+          var input = document.createElement('input');
+          input.name = k;
+          input.value = params[k];
+          form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+        setTimeout(function() {
+          document.body.removeChild(form);
+          document.body.removeChild(iframe);
+          if (callback) callback(true);
+        }, 2000);
+      }
+
+      function sendReportAndSave(email, callback) {
+        if (!GOOGLE_SCRIPT_URL || !GOOGLE_SCRIPT_URL.trim()) {
+          if (callback) callback(false, '尚未設定 Google 試算表網址');
+          return;
+        }
+        var base = GOOGLE_SCRIPT_URL.split('?')[0];
+        var params = {
+          name: startName,
+          email: email,
+          consent: consentCheckbox.checked ? 'yes' : 'no',
+          testType: lastTestType,
+          score: String(lastScore),
+          level: lastLevel.label,
+          levelKey: lastLevel.level,
+          levelDesc: lastLevel.desc,
+          timestamp: new Date().toISOString(),
+          temp: weatherData.temp != null ? String(weatherData.temp) : '',
+          humidity: weatherData.humidity != null ? String(weatherData.humidity) : '',
+          weatherSuggestion: (weatherData.suggestion || '').substring(0, 300)
+        };
+        var iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.name = 'sheetSubmit';
+        document.body.appendChild(iframe);
+        var form = document.createElement('form');
+        form.method = 'GET';
+        form.target = 'sheetSubmit';
+        form.action = base;
+        Object.keys(params).forEach(function(k) {
+          var input = document.createElement('input');
+          input.name = k;
+          input.value = params[k];
+          form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+        setTimeout(function() {
+          document.body.removeChild(form);
+          document.body.removeChild(iframe);
+          if (callback) callback(true);
+        }, 2500);
+      }
+
+      submitReportBtn.addEventListener('click', function() {
+        var email = (emailInput.value || '').trim();
+        if (!email) {
+          alert('請輸入 Email。');
+          emailInput.focus();
+          return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          alert('請輸入有效的 Email。');
+          emailInput.focus();
+          return;
+        }
+        if (!consentCheckbox.checked) {
+          alert('請勾選同意條款後再送出。');
+          consentCheckbox.focus();
+          return;
+        }
+        submitReportBtn.disabled = true;
+        sheetStatus.textContent = '正在寄送報告至您的 Email 並儲存結果…';
+        sendReportAndSave(email, function(ok, msg) {
+          submitReportBtn.disabled = false;
+          if (ok) {
+            sheetStatus.textContent = '報告已寄至您的 Email，請查收。';
+            sheetStatus.style.color = 'var(--green)';
+          } else {
+            sheetStatus.textContent = msg || '送出失敗，請檢查設定或稍後再試。';
+            sheetStatus.style.color = 'var(--red)';
+          }
+        });
+      });
+
+      backBtn.addEventListener('click', function() {
+        showPage(pageStart);
+        document.querySelectorAll('input[type="radio"]').forEach(function(r) { r.checked = false; });
+        document.querySelectorAll('.option').forEach(function(o) { o.classList.remove('selected'); });
+        startNameInput.value = '';
+        startAgeSelect.value = '';
+        emailInput.value = '';
+        consentCheckbox.checked = false;
+        sheetStatus.textContent = '';
+        sheetStatus.style.color = '';
+        autoSaveStatus.textContent = '';
+        autoSaveStatus.style.color = '';
+      });
+    })();
+  </script>
+</body>
+</html>
