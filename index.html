@@ -317,8 +317,8 @@
         <button type="button" class="btn btn-secondary" id="btn-back-to-start">← 上一步（修改姓名／年齡）</button>
       </div>
       <div id="weather-card" class="weather-card">
-        <h3>🌤 高雄今日天氣與建議</h3>
-        <div id="weather-content" class="weather-loading">正在取得天氣…</div>
+        <h3>🌤 高雄今日天氣與空氣品質</h3>
+        <div id="weather-content" class="weather-loading">正在取得天氣與空氣品質…</div>
         <div id="weather-suggestion" class="weather-suggestion hidden"></div>
       </div>
 
@@ -451,7 +451,23 @@
         </div>
       </div>
 
-      <button type="button" class="btn btn-primary" id="submit-btn">看結果</button>
+      <!-- Email 輸入區域（在「看結果」按鈕下方） -->
+      <div class="email-gate no-print" style="margin-top: 24px;">
+        <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 16px;">請填寫以下資料以查看測驗結果：</p>
+        <div class="field">
+          <label for="email">Email <span style="color: var(--red);">*</span></label>
+          <input type="email" id="email" placeholder="您的 Email" autocomplete="email" required>
+        </div>
+        <div class="consent-box">
+          <label class="consent-label">
+            <input type="checkbox" id="consent" aria-describedby="consent-desc" required>
+            <span id="consent-desc" class="consent-text">我同意診所將氣喘控制測驗報告寄至上述 Email，並同意診所於日後以該 Email 寄送衛教、活動或相關資訊給我。</span>
+          </label>
+        </div>
+        <p class="pdf-note">送出後報告將自動寄至您的 Email，並記錄至診所 Google 試算表供追蹤。</p>
+      </div>
+
+      <button type="button" class="btn btn-primary" id="submit-btn" style="margin-top: 20px;">看結果</button>
     </div>
 
     <!-- 第三頁：結果 -->
@@ -459,6 +475,8 @@
       <div class="btn-row" style="margin-bottom: 16px;">
         <button type="button" class="btn btn-secondary" id="btn-back-to-quiz">← 上一步（修改答案）</button>
       </div>
+      
+      <!-- 結果顯示區域 -->
       <div class="card no-print">
         <p id="result-greeting" style="font-size: 1rem; margin-bottom: 12px;"></p>
         <div id="score-display" class="score-box">
@@ -467,25 +485,7 @@
           <div class="score-desc" id="score-desc">—</div>
         </div>
         <p id="score-detail" style="font-size: 0.95rem; color: var(--text-muted); margin-top: 12px;"></p>
-      </div>
-
-      <p id="auto-save-status" style="font-size: 0.9rem; margin-top: 16px; color: var(--text-muted);"></p>
-
-      <div class="email-gate no-print" style="margin-top: 24px;">
-        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;">（選填）若需將報告寄至 Email，請填寫以下資料：</p>
-        <div class="field">
-          <label for="email">Email</label>
-          <input type="email" id="email" placeholder="您的 Email" autocomplete="email">
-        </div>
-        <div class="consent-box">
-          <label class="consent-label">
-            <input type="checkbox" id="consent" aria-describedby="consent-desc">
-            <span id="consent-desc" class="consent-text">我同意診所將氣喘控制測驗報告寄至上述 Email，並同意診所於日後以該 Email 寄送衛教、活動或相關資訊給我。</span>
-          </label>
-        </div>
-        <p class="pdf-note">送出後報告將自動寄至您的 Email，並記錄至診所 Google 試算表供追蹤。</p>
-        <button type="button" class="btn btn-primary" id="submit-report" style="margin-top: 12px;">送出並寄送報告至 Email</button>
-        <p id="sheet-status" style="font-size: 0.85rem; margin-top: 8px; color: var(--text-muted);"></p>
+        <p id="save-status" style="font-size: 0.9rem; margin-top: 16px; color: var(--text-muted);"></p>
       </div>
 
       <div class="print-only" id="pdf-content" style="display: none;">
@@ -532,10 +532,7 @@
       var scoreLabel = document.getElementById('score-label');
       var emailInput = document.getElementById('email');
       var consentCheckbox = document.getElementById('consent');
-      var submitReportBtn = document.getElementById('submit-report');
-      var autoSaveStatus = document.getElementById('auto-save-status');
       var backBtn = document.getElementById('back-btn');
-      var sheetStatus = document.getElementById('sheet-status');
 
       var currentMode = 'child';
       var startName = '';
@@ -543,7 +540,7 @@
       var lastScore = 0;
       var lastLevel = {};
       var lastTestType = 'C-ACT';
-      var weatherData = { temp: null, humidity: null, suggestion: '' };
+      var weatherData = { temp: null, humidity: null, aqi: null, aqiLevel: null, suggestion: '' };
 
       function showPage(page) {
         pageStart.classList.remove('active');
@@ -579,43 +576,108 @@
         showPage(pageStart);
       });
 
+      function getAQILevel(aqi) {
+        if (aqi <= 50) return { level: 'good', label: '良好', color: '#22c55e' };
+        if (aqi <= 100) return { level: 'moderate', label: '普通', color: '#eab308' };
+        if (aqi <= 150) return { level: 'unhealthySensitive', label: '對敏感族群不健康', color: '#f97316' };
+        if (aqi <= 200) return { level: 'unhealthy', label: '不健康', color: '#ef4444' };
+        if (aqi <= 300) return { level: 'veryUnhealthy', label: '非常不健康', color: '#a855f7' };
+        return { level: 'hazardous', label: '危害', color: '#7c2d12' };
+      }
+
       function loadWeather() {
-        var url = 'https://api.open-meteo.com/v1/forecast?latitude=22.6273&longitude=120.3014&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FTaipei';
-        fetch(url)
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            var cur = data.current;
+        var weatherUrl = 'https://api.open-meteo.com/v1/forecast?latitude=22.6273&longitude=120.3014&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FTaipei';
+        var aqiUrl = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=22.6273&longitude=120.3014&current=us_aqi,pm10,pm2_5&timezone=Asia%2FTaipei';
+        
+        Promise.all([
+          fetch(weatherUrl).then(function(r) { return r.json(); }),
+          fetch(aqiUrl).then(function(r) { return r.json(); })
+        ])
+          .then(function(results) {
+            var weatherData_result = results[0];
+            var aqiData = results[1];
+            
+            var cur = weatherData_result.current;
             var temp = Math.round(cur.temperature_2m);
             var hum = cur.relative_humidity_2m;
+            var aqi = aqiData.current ? Math.round(aqiData.current.us_aqi) : null;
+            var pm25 = aqiData.current ? Math.round(aqiData.current.pm2_5) : null;
+            var pm10 = aqiData.current ? Math.round(aqiData.current.pm10) : null;
+            
             weatherData.temp = temp;
             weatherData.humidity = hum;
+            weatherData.aqi = aqi;
+            weatherData.pm25 = pm25;
+            weatherData.pm10 = pm10;
+            
+            var aqiInfo = aqi !== null ? getAQILevel(aqi) : null;
+            weatherData.aqiLevel = aqiInfo ? aqiInfo.label : null;
+            
             var suggestions = [];
+            
+            // AQI 建議
+            if (aqi !== null) {
+              if (aqi <= 50) {
+                suggestions.push('空氣品質良好，適合戶外活動。');
+              } else if (aqi <= 100) {
+                suggestions.push('空氣品質普通，一般民眾可正常活動，但敏感族群（如氣喘患者）應減少長時間戶外活動。');
+              } else if (aqi <= 150) {
+                suggestions.push('空氣品質對敏感族群不健康，建議減少戶外活動，外出請配戴口罩。');
+              } else if (aqi <= 200) {
+                suggestions.push('空氣品質不健康，所有人應減少戶外活動，氣喘患者應避免外出，必要時請配戴口罩。');
+              } else {
+                suggestions.push('空氣品質非常不健康，請避免戶外活動，氣喘患者應待在室內並關閉門窗，使用空氣清淨機。');
+              }
+            }
+            
+            // 濕度建議
             if (hum >= 75) {
-              suggestions.push('今日濕度較高（' + hum + '%），塵蟎與黴菌較易滋生，建議除濕、保持通風，過敏與氣喘患者請留意環境。');
+              suggestions.push('今日濕度較高（' + hum + '%），塵蟎與黴菌較易滋生，建議除濕、保持通風。');
             } else if (hum >= 60) {
               suggestions.push('濕度適中偏高，若為塵蟎過敏可注意寢具清潔與除濕。');
             }
+            
+            // 溫度建議
             if (temp >= 32) {
               suggestions.push('氣溫較高，戶外活動請注意補充水分、避免長時間曝曬。');
             } else if (temp <= 18) {
               suggestions.push('早晚偏涼，注意保暖，冷空氣可能誘發氣喘，外出可戴口罩。');
             }
+            
             if (suggestions.length === 0) {
               suggestions.push('今日天氣對氣喘病友較為友善，請持續規律用藥與追蹤。');
             }
+            
             weatherData.suggestion = suggestions.join(' ');
-            document.getElementById('weather-content').innerHTML =
-              '<div class="weather-row">' +
+            
+            // 建立顯示內容
+            var weatherHtml = '<div class="weather-row">' +
               '<span class="weather-item"><span>溫度</span>' + temp + '°C</span>' +
-              '<span class="weather-item"><span>濕度</span>' + hum + '%</span>' +
-              '</div>';
+              '<span class="weather-item"><span>濕度</span>' + hum + '%</span>';
+            
+            if (aqi !== null) {
+              var aqiColor = aqiInfo ? aqiInfo.color : '#64748b';
+              weatherHtml += '<span class="weather-item"><span>AQI</span><span style="color: ' + aqiColor + '; font-weight: 600;">' + aqi + '</span> <span style="font-size: 0.85rem; opacity: 0.9;">(' + (aqiInfo ? aqiInfo.label : '未知') + ')</span></span>';
+            }
+            
+            weatherHtml += '</div>';
+            
+            if (pm25 !== null || pm10 !== null) {
+              weatherHtml += '<div class="weather-row" style="margin-top: 8px; font-size: 0.9rem; opacity: 0.9;">';
+              if (pm25 !== null) weatherHtml += '<span>PM2.5: ' + pm25 + ' μg/m³</span>';
+              if (pm10 !== null) weatherHtml += '<span style="margin-left: 12px;">PM10: ' + pm10 + ' μg/m³</span>';
+              weatherHtml += '</div>';
+            }
+            
+            document.getElementById('weather-content').innerHTML = weatherHtml;
             document.getElementById('weather-content').classList.remove('weather-loading');
             var sugEl = document.getElementById('weather-suggestion');
             sugEl.textContent = '💡 ' + weatherData.suggestion;
             sugEl.classList.remove('hidden');
           })
-          .catch(function() {
-            document.getElementById('weather-content').innerHTML = '無法取得天氣，請稍後再試。';
+          .catch(function(err) {
+            console.error('Weather/AQI fetch error:', err);
+            document.getElementById('weather-content').innerHTML = '無法取得天氣或空氣品質數據，請稍後再試。';
             document.getElementById('weather-content').classList.remove('weather-loading');
           });
       }
@@ -699,24 +761,65 @@
           testType = 'ACT';
           scoreRange = '滿分 25';
         }
+        
+        // 驗證 Email 和同意條款
+        var email = (emailInput.value || '').trim();
+        if (!email) {
+          alert('請輸入 Email。');
+          emailInput.focus();
+          return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          alert('請輸入有效的 Email。');
+          emailInput.focus();
+          return;
+        }
+        if (!consentCheckbox.checked) {
+          alert('請勾選同意條款後再查看結果。');
+          consentCheckbox.focus();
+          return;
+        }
+        
+        // 儲存分數和等級
+        lastScore = score;
+        lastLevel = level;
+        lastTestType = testType;
+        
+        // 更新並顯示結果
         resultGreeting.textContent = startName + ' 您好，以下是您的測驗結果：';
-        showPage(pageResult);
         updateResult(score, level, testType, scoreRange);
-        autoSaveStatus.textContent = '正在儲存至診所試算表…';
-        autoSaveStatus.style.color = '';
-        saveToSheet(function(ok, msg) {
+        
+        // 顯示結果頁面
+        showPage(pageResult);
+        
+        // 保存並寄送報告（只執行一次）
+        submitBtn.disabled = true;
+        document.getElementById('save-status').textContent = '正在寄送報告至您的 Email 並儲存結果…';
+        document.getElementById('save-status').style.color = '';
+        
+        sendReportAndSave(email, function(ok, msg) {
+          submitBtn.disabled = false;
           if (ok) {
-            autoSaveStatus.textContent = '已自動儲存至診所 Google 試算表。';
-            autoSaveStatus.style.color = 'var(--green)';
+            document.getElementById('save-status').textContent = '報告已寄至您的 Email，請查收。結果已儲存至診所 Google 試算表。';
+            document.getElementById('save-status').style.color = 'var(--green)';
           } else {
-            autoSaveStatus.textContent = msg || '儲存失敗，請檢查設定。';
-            autoSaveStatus.style.color = 'var(--red)';
+            document.getElementById('save-status').textContent = msg || '送出失敗，請檢查設定或稍後再試。';
+            document.getElementById('save-status').style.color = 'var(--red)';
           }
         });
       });
 
       btnBackToQuiz.addEventListener('click', function() {
         showPage(pageQuiz);
+        // 重置 Email 和同意條款狀態
+        emailInput.value = '';
+        consentCheckbox.checked = false;
+        submitBtn.disabled = false;
+        var saveStatusEl = document.getElementById('save-status');
+        if (saveStatusEl) {
+          saveStatusEl.textContent = '';
+          saveStatusEl.style.color = '';
+        }
       });
 
       document.querySelectorAll('.option').forEach(function(el) {
@@ -783,6 +886,7 @@
         var base = GOOGLE_SCRIPT_URL.split('?')[0];
         var params = {
           name: startName,
+          ageGroup: startAgeGroup,
           email: email,
           consent: consentCheckbox.checked ? 'yes' : 'no',
           testType: lastTestType,
@@ -793,6 +897,10 @@
           timestamp: new Date().toISOString(),
           temp: weatherData.temp != null ? String(weatherData.temp) : '',
           humidity: weatherData.humidity != null ? String(weatherData.humidity) : '',
+          aqi: weatherData.aqi != null ? String(weatherData.aqi) : '',
+          aqiLevel: weatherData.aqiLevel || '',
+          pm25: weatherData.pm25 != null ? String(weatherData.pm25) : '',
+          pm10: weatherData.pm10 != null ? String(weatherData.pm10) : '',
           weatherSuggestion: (weatherData.suggestion || '').substring(0, 300)
         };
         var iframe = document.createElement('iframe');
@@ -818,36 +926,6 @@
         }, 2500);
       }
 
-      submitReportBtn.addEventListener('click', function() {
-        var email = (emailInput.value || '').trim();
-        if (!email) {
-          alert('請輸入 Email。');
-          emailInput.focus();
-          return;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          alert('請輸入有效的 Email。');
-          emailInput.focus();
-          return;
-        }
-        if (!consentCheckbox.checked) {
-          alert('請勾選同意條款後再送出。');
-          consentCheckbox.focus();
-          return;
-        }
-        submitReportBtn.disabled = true;
-        sheetStatus.textContent = '正在寄送報告至您的 Email 並儲存結果…';
-        sendReportAndSave(email, function(ok, msg) {
-          submitReportBtn.disabled = false;
-          if (ok) {
-            sheetStatus.textContent = '報告已寄至您的 Email，請查收。';
-            sheetStatus.style.color = 'var(--green)';
-          } else {
-            sheetStatus.textContent = msg || '送出失敗，請檢查設定或稍後再試。';
-            sheetStatus.style.color = 'var(--red)';
-          }
-        });
-      });
 
       backBtn.addEventListener('click', function() {
         showPage(pageStart);
@@ -857,10 +935,12 @@
         startAgeSelect.value = '';
         emailInput.value = '';
         consentCheckbox.checked = false;
-        sheetStatus.textContent = '';
-        sheetStatus.style.color = '';
-        autoSaveStatus.textContent = '';
-        autoSaveStatus.style.color = '';
+        var saveStatusEl = document.getElementById('save-status');
+        if (saveStatusEl) {
+          saveStatusEl.textContent = '';
+          saveStatusEl.style.color = '';
+        }
+        submitBtn.disabled = false;
       });
     })();
   </script>
