@@ -17,6 +17,9 @@ function doGet(e) {
     var params = e.parameter;
     var action = params.action || '';
     var name = params.name || '';
+    var birthday = params.birthday || '';
+    var chartNumber = params.chartNumber || '';
+    var patientId = params.patientId || '';
     var ageGroup = params.ageGroup || '';
     var email = params.email || '';
     var consent = params.consent || '';
@@ -34,7 +37,8 @@ function doGet(e) {
     var sheet = ss.getSheets()[0];
     if (sheet.getLastRow() === 0) {
       sheet.appendRow([
-        '時間', '姓名', '年齡區間', '測驗類型', '分數', '控制等級', '等級代碼',
+        '時間', 'patient_id', '病歷號', '姓名', '出生日期', '年齡區間',
+        '測驗類型', '分數', '控制等級', '等級代碼',
         '高雄氣溫°C', '高雄濕度%', '天氣建議', 'Email', '同意寄送報告及行銷'
       ]);
     }
@@ -42,7 +46,10 @@ function doGet(e) {
     var ageLabel = ageGroup === 'child' ? '4～11歲（兒童）' : ageGroup === 'adult' ? '12歲以上（成人）' : ageGroup;
     sheet.appendRow([
       timestamp,
+      patientId,
+      chartNumber,
       name,
+      birthday,
       ageLabel,
       testType,
       score,

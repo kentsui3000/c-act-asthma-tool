@@ -291,12 +291,32 @@
       <p class="sub">兒童 C-ACT（4～11 歲）／成人 ACT（12 歲以上）</p>
     </header>
 
-    <!-- 第一頁：姓名 + 年齡 -->
+    <!-- 第一頁：姓名 + 出生日期（民國）+ 病歷號 + 年齡區間 -->
     <div id="page-start" class="page-section active no-print">
       <div class="start-card">
         <div class="field">
           <label for="start-name">姓名 <span style="color: var(--red);">*</span></label>
           <input type="text" id="start-name" placeholder="請輸入姓名" required autocomplete="name">
+        </div>
+        <div class="field">
+          <label>出生日期（民國） <span style="color: var(--red);">*</span></label>
+          <div style="display:flex;gap:8px;">
+            <select id="start-roc-year" style="flex:1;" required>
+              <option value="">年</option>
+            </select>
+            <select id="start-month" style="width:80px;" required>
+              <option value="">月</option>
+            </select>
+            <select id="start-day" style="width:80px;" required>
+              <option value="">日</option>
+            </select>
+          </div>
+          <p id="birthday-western" style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;"></p>
+        </div>
+        <div class="field">
+          <label for="start-chart">病歷號</label>
+          <input type="text" id="start-chart" placeholder="選填，由櫃檯人員協助輸入" autocomplete="off">
+          <p style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">如有病歷號可加速資料比對</p>
         </div>
         <div class="field">
           <label for="start-age">年齡區間 <span style="color: var(--red);">*</span></label>
@@ -537,10 +557,78 @@
       var currentMode = 'child';
       var startName = '';
       var startAgeGroup = '';
+      var startBirthdayROC = '';
+      var startChartNumber = '';
+      var startPatientId = '';
       var lastScore = 0;
       var lastLevel = {};
       var lastTestType = 'C-ACT';
       var weatherData = { temp: null, humidity: null, aqi: null, aqiLevel: null, suggestion: '' };
+
+      // ── ROC birthday dropdowns ──
+      var rocYearSelect = document.getElementById('start-roc-year');
+      var monthSelect = document.getElementById('start-month');
+      var daySelect = document.getElementById('start-day');
+      var birthdayWestern = document.getElementById('birthday-western');
+      var chartInput = document.getElementById('start-chart');
+
+      var currentROCYear = new Date().getFullYear() - 1911;
+      for (var y = currentROCYear; y >= 1; y--) {
+        var opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = '民國 ' + y + ' 年';
+        rocYearSelect.appendChild(opt);
+      }
+      for (var m = 1; m <= 12; m++) {
+        var opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m + ' 月';
+        monthSelect.appendChild(opt);
+      }
+      function updateDays() {
+        var ry = parseInt(rocYearSelect.value) || 0;
+        var mo = parseInt(monthSelect.value) || 0;
+        var prevDay = daySelect.value;
+        daySelect.innerHTML = '<option value="">日</option>';
+        var maxDays = 31;
+        if (ry && mo) {
+          maxDays = new Date(ry + 1911, mo, 0).getDate();
+        }
+        for (var d = 1; d <= maxDays; d++) {
+          var opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d + ' 日';
+          daySelect.appendChild(opt);
+        }
+        if (prevDay && parseInt(prevDay) <= maxDays) daySelect.value = prevDay;
+        updateBirthdayDisplay();
+      }
+      function updateBirthdayDisplay() {
+        var ry = rocYearSelect.value;
+        var mo = monthSelect.value;
+        var dy = daySelect.value;
+        if (ry && mo && dy) {
+          birthdayWestern.textContent = '西元 ' + (parseInt(ry) + 1911) + ' 年 ' + mo + ' 月 ' + dy + ' 日';
+        } else {
+          birthdayWestern.textContent = '';
+        }
+        // Auto-select age group based on birthday
+        if (ry && mo && dy) {
+          var birthDate = new Date(parseInt(ry) + 1911, parseInt(mo) - 1, parseInt(dy));
+          var today = new Date();
+          var age = today.getFullYear() - birthDate.getFullYear();
+          var mDiff = today.getMonth() - birthDate.getMonth();
+          if (mDiff < 0 || (mDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+          if (age >= 4 && age <= 11) {
+            startAgeSelect.value = 'child';
+          } else if (age >= 12) {
+            startAgeSelect.value = 'adult';
+          }
+        }
+      }
+      rocYearSelect.addEventListener('change', updateDays);
+      monthSelect.addEventListener('change', updateDays);
+      daySelect.addEventListener('change', updateBirthdayDisplay);
 
       function showPage(page) {
         pageStart.classList.remove('active');
@@ -551,10 +639,18 @@
 
       btnStartQuiz.addEventListener('click', function() {
         var name = (startNameInput.value || '').trim();
+        var ry = rocYearSelect.value;
+        var mo = monthSelect.value;
+        var dy = daySelect.value;
         var age = startAgeSelect.value;
+        var chart = (chartInput.value || '').trim();
         if (!name) {
           alert('請輸入姓名。');
           startNameInput.focus();
+          return;
+        }
+        if (!ry || !mo || !dy) {
+          alert('請選擇完整出生日期。');
           return;
         }
         if (!age) {
@@ -564,6 +660,9 @@
         }
         startName = name;
         startAgeGroup = age;
+        startBirthdayROC = ry + '/' + String(mo).padStart(2, '0') + '/' + String(dy).padStart(2, '0');
+        startChartNumber = chart;
+        startPatientId = chart ? 'CHART-' + chart : 'NAME-' + name + '-DOB-' + startBirthdayROC;
         currentMode = age;
         cactSection.classList.toggle('hidden', age !== 'child');
         actSection.classList.toggle('hidden', age !== 'adult');
@@ -845,6 +944,9 @@
         var params = {
           action: 'finish',
           name: startName,
+          birthday: startBirthdayROC,
+          chartNumber: startChartNumber,
+          patientId: startPatientId,
           ageGroup: startAgeGroup,
           testType: lastTestType,
           score: String(lastScore),
@@ -886,6 +988,9 @@
         var base = GOOGLE_SCRIPT_URL.split('?')[0];
         var params = {
           name: startName,
+          birthday: startBirthdayROC,
+          chartNumber: startChartNumber,
+          patientId: startPatientId,
           ageGroup: startAgeGroup,
           email: email,
           consent: consentCheckbox.checked ? 'yes' : 'no',
@@ -932,7 +1037,15 @@
         document.querySelectorAll('input[type="radio"]').forEach(function(r) { r.checked = false; });
         document.querySelectorAll('.option').forEach(function(o) { o.classList.remove('selected'); });
         startNameInput.value = '';
+        rocYearSelect.value = '';
+        monthSelect.value = '';
+        daySelect.innerHTML = '<option value="">日</option>';
+        birthdayWestern.textContent = '';
+        chartInput.value = '';
         startAgeSelect.value = '';
+        startBirthdayROC = '';
+        startChartNumber = '';
+        startPatientId = '';
         emailInput.value = '';
         consentCheckbox.checked = false;
         var saveStatusEl = document.getElementById('save-status');
