@@ -277,6 +277,31 @@
     }
     .brand-print .name { font-size: 1.2rem; font-weight: 700; }
     .brand-print .link { font-size: 0.9rem; color: var(--primary); margin-top: 4px; }
+    /* Nurse list */
+    .nurse-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(71,96,122,0.12);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .nurse-row:hover { background: rgba(71,96,122,0.04); }
+    .nurse-row .nr-name { font-weight: 600; min-width: 70px; }
+    .nurse-row .nr-chart { font-size: 0.8rem; color: var(--text-muted); min-width: 60px; }
+    .nurse-row .nr-score { font-weight: 700; min-width: 40px; text-align: center; }
+    .nurse-row .nr-level { font-size: 0.8rem; }
+    .nurse-row .nr-pf {
+      margin-left: auto;
+      font-size: 0.85rem;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: rgba(71,96,122,0.08);
+      white-space: nowrap;
+    }
+    .nurse-row .nr-pf.empty { color: var(--accent); font-weight: 600; background: rgba(255,182,64,0.15); }
   </style>
 </head>
 <body>
@@ -328,6 +353,7 @@
         </div>
         <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 8px;">選擇年齡後將自動顯示對應測驗，避免選錯。</p>
         <button type="button" class="btn btn-primary" id="btn-start-quiz" style="margin-top: 20px;">開始測驗</button>
+        <button type="button" class="btn btn-secondary" id="btn-nurse-mode" style="margin-top: 12px;">護理師模式</button>
       </div>
     </div>
 
@@ -505,6 +531,17 @@
           <div class="score-desc" id="score-desc">—</div>
         </div>
         <p id="score-detail" style="font-size: 0.95rem; color: var(--text-muted); margin-top: 12px;"></p>
+
+        <!-- Peak Flow (optional, filled by nurse) -->
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 2px dashed rgba(71,96,122,0.2);">
+          <label for="peak-flow-input" style="font-weight: 500; font-size: 0.95rem;">尖峰呼氣流量 Peak Flow（選填，由護理師輸入）</label>
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
+            <input type="number" id="peak-flow-input" placeholder="例：320" min="50" max="900" style="flex:1; padding: 12px 14px; font-size: 1rem; border: 2px solid rgba(71,96,122,0.25); border-radius: 10px; font-family: inherit;">
+            <span style="font-size: 0.9rem; color: var(--text-muted); white-space: nowrap;">L/min</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">護理師可在此輸入尖峰呼氣流量數值，此欄位為選填。</p>
+        </div>
+
         <p id="save-status" style="font-size: 0.9rem; margin-top: 16px; color: var(--text-muted);"></p>
       </div>
 
@@ -526,6 +563,37 @@
 
       <button type="button" class="btn btn-secondary no-print" id="back-btn" style="margin-top: 16px; background: var(--dark);">再測一次（回到第一頁）</button>
     </div>
+
+    <!-- 第四頁：護理師模式 -->
+    <div id="page-nurse" class="page-section no-print">
+      <div class="btn-row" style="margin-bottom: 16px;">
+        <button type="button" class="btn btn-secondary" id="btn-nurse-back">← 回到首頁</button>
+        <button type="button" class="btn btn-primary" id="btn-nurse-refresh" style="flex:0 0 auto; width: auto;">重新整理</button>
+      </div>
+      <div class="start-card">
+        <h2 style="font-size: 1.2rem; color: var(--dark); margin-bottom: 4px;">護理師模式</h2>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;">今日完成氣喘測驗的病患列表，可補填 Peak Flow。</p>
+        <div id="nurse-list-container">
+          <p style="color: var(--text-muted);">載入中…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Peak Flow 編輯 Modal -->
+    <div id="pf-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center;">
+      <div style="background:white; border-radius:var(--radius); padding:24px; width:90%; max-width:380px; box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+        <h3 style="font-size:1.1rem; color:var(--dark); margin-bottom:4px;" id="pf-modal-title">編輯 Peak Flow</h3>
+        <p id="pf-modal-patient" style="font-size:0.9rem; color:var(--text-muted); margin-bottom:16px;"></p>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="number" id="pf-modal-input" placeholder="例：320" min="50" max="900" style="flex:1; padding:12px 14px; font-size:1rem; border:2px solid rgba(71,96,122,0.25); border-radius:10px; font-family:inherit;">
+          <span style="font-size:0.9rem; color:var(--text-muted);">L/min</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:16px; justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" id="pf-modal-cancel" style="width:auto; padding:10px 20px;">取消</button>
+          <button type="button" class="btn btn-primary" id="pf-modal-save" style="width:auto; padding:10px 20px;">儲存</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -533,9 +601,12 @@
       // ═══ 設定：請換成您的 Google Apps Script 網路應用程式網址 ═══
       var GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyK3AanqxlBZcmmOwt3boAtxHY-anpRnBW3g5Dq3HSCSrSuI3LBCgffHk9e4Y4tvLmiKA/exec'; // 例：'https://script.google.com/macros/s/xxxxx/exec'
 
+      var NURSE_PIN = '1234'; // Configurable nurse mode PIN
+
       var pageStart = document.getElementById('page-start');
       var pageQuiz = document.getElementById('page-quiz');
       var pageResult = document.getElementById('page-result');
+      var pageNurse = document.getElementById('page-nurse');
       var startNameInput = document.getElementById('start-name');
       var startAgeSelect = document.getElementById('start-age');
       var btnStartQuiz = document.getElementById('btn-start-quiz');
@@ -634,8 +705,88 @@
         pageStart.classList.remove('active');
         pageQuiz.classList.remove('active');
         pageResult.classList.remove('active');
+        pageNurse.classList.remove('active');
         page.classList.add('active');
       }
+
+      // ── Nurse Mode ──
+      document.getElementById('btn-nurse-mode').addEventListener('click', function() {
+        var pin = prompt('請輸入護理師密碼：');
+        if (pin === NURSE_PIN) {
+          showPage(pageNurse);
+          loadNurseList();
+        } else if (pin !== null) {
+          alert('密碼錯誤。');
+        }
+      });
+      document.getElementById('btn-nurse-back').addEventListener('click', function() { showPage(pageStart); });
+      document.getElementById('btn-nurse-refresh').addEventListener('click', loadNurseList);
+
+      var nurseEditingRow = null; // sheet row index being edited
+
+      function loadNurseList() {
+        var container = document.getElementById('nurse-list-container');
+        container.innerHTML = '<p style="color:var(--text-muted);">載入中…</p>';
+        // Fetch today's records via Apps Script
+        var url = GOOGLE_SCRIPT_URL.split('?')[0] + '?mode=nurse_list';
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .catch(function() { return { rows: [] }; })
+          .then(function(data) {
+            if (!data.rows || !data.rows.length) {
+              container.innerHTML = '<p style="color:var(--text-muted);">今日尚無測驗記錄。</p>';
+              return;
+            }
+            var html = '';
+            data.rows.forEach(function(r) {
+              var levelColor = r.levelKey === 'good' ? 'var(--green)' : r.levelKey === 'partial' ? 'var(--yellow)' : 'var(--red)';
+              var pfText = r.peakFlow ? r.peakFlow + ' L/min' : '＋ 填入 PF';
+              var pfClass = r.peakFlow ? '' : 'empty';
+              html += '<div class="nurse-row" data-row="' + r.rowIndex + '" data-name="' + (r.name || '') + '">' +
+                '<span class="nr-name">' + (r.name || '—') + '</span>' +
+                '<span class="nr-chart">' + (r.chart || '—') + '</span>' +
+                '<span class="nr-score" style="color:' + levelColor + ';">' + (r.score || '—') + '</span>' +
+                '<span class="nr-level" style="color:' + levelColor + ';">' + (r.level || '') + '</span>' +
+                '<span class="nr-pf ' + pfClass + '">' + pfText + '</span>' +
+                '</div>';
+            });
+            container.innerHTML = html;
+            // Attach click handlers
+            container.querySelectorAll('.nurse-row').forEach(function(row) {
+              row.addEventListener('click', function() {
+                nurseEditingRow = parseInt(this.getAttribute('data-row'));
+                var name = this.getAttribute('data-name');
+                document.getElementById('pf-modal-patient').textContent = name;
+                document.getElementById('pf-modal-input').value = '';
+                var modal = document.getElementById('pf-modal');
+                modal.style.display = 'flex';
+              });
+            });
+          });
+      }
+
+      // PF Modal handlers
+      document.getElementById('pf-modal-cancel').addEventListener('click', function() {
+        document.getElementById('pf-modal').style.display = 'none';
+      });
+      document.getElementById('pf-modal-save').addEventListener('click', function() {
+        var val = document.getElementById('pf-modal-input').value;
+        if (!val || isNaN(val) || parseInt(val) < 50 || parseInt(val) > 900) {
+          alert('請輸入有效的 Peak Flow 數值（50-900 L/min）。');
+          return;
+        }
+        var url = GOOGLE_SCRIPT_URL.split('?')[0] +
+          '?mode=update_pf&rowIndex=' + nurseEditingRow +
+          '&peakFlow=' + encodeURIComponent(val);
+        fetch(url)
+          .then(function() {
+            document.getElementById('pf-modal').style.display = 'none';
+            loadNurseList(); // refresh
+          })
+          .catch(function() {
+            alert('儲存失敗，請稍後再試。');
+          });
+      });
 
       btnStartQuiz.addEventListener('click', function() {
         var name = (startNameInput.value || '').trim();
@@ -914,6 +1065,7 @@
         emailInput.value = '';
         consentCheckbox.checked = false;
         submitBtn.disabled = false;
+        document.getElementById('peak-flow-input').value = '';
         var saveStatusEl = document.getElementById('save-status');
         if (saveStatusEl) {
           saveStatusEl.textContent = '';
@@ -1006,7 +1158,8 @@
           aqiLevel: weatherData.aqiLevel || '',
           pm25: weatherData.pm25 != null ? String(weatherData.pm25) : '',
           pm10: weatherData.pm10 != null ? String(weatherData.pm10) : '',
-          weatherSuggestion: (weatherData.suggestion || '').substring(0, 300)
+          weatherSuggestion: (weatherData.suggestion || '').substring(0, 300),
+          peakFlow: (document.getElementById('peak-flow-input').value || '').trim()
         };
         var iframe = document.createElement('iframe');
         iframe.style.display = 'none';
@@ -1048,6 +1201,7 @@
         startPatientId = '';
         emailInput.value = '';
         consentCheckbox.checked = false;
+        document.getElementById('peak-flow-input').value = '';
         var saveStatusEl = document.getElementById('save-status');
         if (saveStatusEl) {
           saveStatusEl.textContent = '';
