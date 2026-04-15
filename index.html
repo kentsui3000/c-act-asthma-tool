@@ -344,15 +344,8 @@
           <input type="text" id="start-chart" placeholder="選填，由櫃檯人員協助輸入" autocomplete="off">
           <p style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">如有病歷號可加速資料比對</p>
         </div>
-        <div class="field">
-          <label for="start-age">年齡區間 <span style="color: var(--red);">*</span></label>
-          <select id="start-age" required>
-            <option value="">請選擇</option>
-            <option value="child">4～11 歲（兒童 C-ACT）</option>
-            <option value="adult">12 歲以上（成人 ACT）</option>
-          </select>
-        </div>
-        <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 8px;">選擇年齡後將自動顯示對應測驗，避免選錯。</p>
+        <input type="hidden" id="start-age" value="">
+        <p id="age-auto-label" style="font-size: 0.9rem; color: var(--text-muted); margin-top: 8px; display: none;"></p>
         <button type="button" class="btn btn-primary" id="btn-start-quiz" style="margin-top: 20px;">開始測驗</button>
       </div>
     </div>
@@ -684,6 +677,7 @@
           birthdayWestern.textContent = '';
         }
         // Auto-select age group based on birthday
+        var ageLabel = document.getElementById('age-auto-label');
         if (ry && mo && dy) {
           var birthDate = new Date(parseInt(ry) + 1911, parseInt(mo) - 1, parseInt(dy));
           var today = new Date();
@@ -692,9 +686,23 @@
           if (mDiff < 0 || (mDiff === 0 && today.getDate() < birthDate.getDate())) age--;
           if (age >= 4 && age <= 11) {
             startAgeSelect.value = 'child';
+            ageLabel.textContent = '👶 ' + age + ' 歲 → 將使用兒童 C-ACT 測驗';
+            ageLabel.style.display = 'block';
+            ageLabel.style.color = 'var(--accent)';
           } else if (age >= 12) {
             startAgeSelect.value = 'adult';
+            ageLabel.textContent = '🧑 ' + age + ' 歲 → 將使用成人 ACT 測驗';
+            ageLabel.style.display = 'block';
+            ageLabel.style.color = 'var(--primary)';
+          } else {
+            startAgeSelect.value = '';
+            ageLabel.textContent = '⚠️ ' + age + ' 歲 — 本測驗適用 4 歲以上';
+            ageLabel.style.display = 'block';
+            ageLabel.style.color = 'var(--red)';
           }
+        } else {
+          startAgeSelect.value = '';
+          ageLabel.style.display = 'none';
         }
       }
       rocYearSelect.addEventListener('change', updateDays);
@@ -805,8 +813,7 @@
           return;
         }
         if (!age) {
-          alert('請選擇年齡區間。');
-          startAgeSelect.focus();
+          alert('無法判斷年齡區間，請確認出生日期是否正確（須滿 4 歲）。');
           return;
         }
         startName = name;
