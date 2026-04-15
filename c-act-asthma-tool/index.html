@@ -277,6 +277,31 @@
     }
     .brand-print .name { font-size: 1.2rem; font-weight: 700; }
     .brand-print .link { font-size: 0.9rem; color: var(--primary); margin-top: 4px; }
+    /* Nurse list */
+    .nurse-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(71,96,122,0.12);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .nurse-row:hover { background: rgba(71,96,122,0.04); }
+    .nurse-row .nr-name { font-weight: 600; min-width: 70px; }
+    .nurse-row .nr-chart { font-size: 0.8rem; color: var(--text-muted); min-width: 60px; }
+    .nurse-row .nr-score { font-weight: 700; min-width: 40px; text-align: center; }
+    .nurse-row .nr-level { font-size: 0.8rem; }
+    .nurse-row .nr-pf {
+      margin-left: auto;
+      font-size: 0.85rem;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: rgba(71,96,122,0.08);
+      white-space: nowrap;
+    }
+    .nurse-row .nr-pf.empty { color: var(--accent); font-weight: 600; background: rgba(255,182,64,0.15); }
   </style>
 </head>
 <body>
@@ -291,12 +316,33 @@
       <p class="sub">兒童 C-ACT（4～11 歲）／成人 ACT（12 歲以上）</p>
     </header>
 
-    <!-- 第一頁：姓名 + 年齡 -->
+    <!-- 第一頁：姓名 + 出生日期（民國）+ 病歷號 + 年齡區間 -->
     <div id="page-start" class="page-section active no-print">
+      <button type="button" class="btn btn-secondary" id="btn-nurse-mode" style="margin-bottom: 16px; width: 100%; background: var(--primary); opacity: 0.85; font-size: 0.9rem;">🩺 管理模式</button>
       <div class="start-card">
         <div class="field">
           <label for="start-name">姓名 <span style="color: var(--red);">*</span></label>
           <input type="text" id="start-name" placeholder="請輸入姓名" required autocomplete="name">
+        </div>
+        <div class="field">
+          <label>出生日期（民國） <span style="color: var(--red);">*</span></label>
+          <div style="display:flex;gap:8px;">
+            <select id="start-roc-year" style="flex:1;" required>
+              <option value="">年</option>
+            </select>
+            <select id="start-month" style="width:80px;" required>
+              <option value="">月</option>
+            </select>
+            <select id="start-day" style="width:80px;" required>
+              <option value="">日</option>
+            </select>
+          </div>
+          <p id="birthday-western" style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;"></p>
+        </div>
+        <div class="field">
+          <label for="start-chart">病歷號</label>
+          <input type="text" id="start-chart" placeholder="選填，由櫃檯人員協助輸入" autocomplete="off">
+          <p style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">如有病歷號可加速資料比對</p>
         </div>
         <div class="field">
           <label for="start-age">年齡區間 <span style="color: var(--red);">*</span></label>
@@ -317,8 +363,8 @@
         <button type="button" class="btn btn-secondary" id="btn-back-to-start">← 上一步（修改姓名／年齡）</button>
       </div>
       <div id="weather-card" class="weather-card">
-        <h3>🌤 高雄今日天氣與建議</h3>
-        <div id="weather-content" class="weather-loading">正在取得天氣…</div>
+        <h3>🌤 高雄今日天氣與空氣品質</h3>
+        <div id="weather-content" class="weather-loading">正在取得天氣與空氣品質…</div>
         <div id="weather-suggestion" class="weather-suggestion hidden"></div>
       </div>
 
@@ -451,7 +497,23 @@
         </div>
       </div>
 
-      <button type="button" class="btn btn-primary" id="submit-btn">看結果</button>
+      <!-- Email 輸入區域（在「看結果」按鈕下方） -->
+      <div class="email-gate no-print" style="margin-top: 24px;">
+        <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 16px;">請填寫以下資料以查看測驗結果：</p>
+        <div class="field">
+          <label for="email">Email <span style="color: var(--red);">*</span></label>
+          <input type="email" id="email" placeholder="您的 Email" autocomplete="email" required>
+        </div>
+        <div class="consent-box">
+          <label class="consent-label">
+            <input type="checkbox" id="consent" aria-describedby="consent-desc" required>
+            <span id="consent-desc" class="consent-text">我同意診所將氣喘控制測驗報告寄至上述 Email，並同意診所於日後以該 Email 寄送衛教、活動或相關資訊給我。</span>
+          </label>
+        </div>
+        <p class="pdf-note">送出後報告將自動寄至您的 Email，並記錄至診所 Google 試算表供追蹤。</p>
+      </div>
+
+      <button type="button" class="btn btn-primary" id="submit-btn" style="margin-top: 20px;">看結果</button>
     </div>
 
     <!-- 第三頁：結果 -->
@@ -459,6 +521,8 @@
       <div class="btn-row" style="margin-bottom: 16px;">
         <button type="button" class="btn btn-secondary" id="btn-back-to-quiz">← 上一步（修改答案）</button>
       </div>
+      
+      <!-- 結果顯示區域 -->
       <div class="card no-print">
         <p id="result-greeting" style="font-size: 1rem; margin-bottom: 12px;"></p>
         <div id="score-display" class="score-box">
@@ -467,25 +531,18 @@
           <div class="score-desc" id="score-desc">—</div>
         </div>
         <p id="score-detail" style="font-size: 0.95rem; color: var(--text-muted); margin-top: 12px;"></p>
-      </div>
 
-      <p id="auto-save-status" style="font-size: 0.9rem; margin-top: 16px; color: var(--text-muted);"></p>
+        <!-- Peak Flow (optional, filled by nurse) -->
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 2px dashed rgba(71,96,122,0.2);">
+          <label for="peak-flow-input" style="font-weight: 500; font-size: 0.95rem;">尖峰呼氣流量 Peak Flow（選填，由護理師輸入）</label>
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
+            <input type="number" id="peak-flow-input" placeholder="例：320" min="50" max="900" style="flex:1; padding: 12px 14px; font-size: 1rem; border: 2px solid rgba(71,96,122,0.25); border-radius: 10px; font-family: inherit;">
+            <span style="font-size: 0.9rem; color: var(--text-muted); white-space: nowrap;">L/min</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">護理師可在此輸入尖峰呼氣流量數值，此欄位為選填。</p>
+        </div>
 
-      <div class="email-gate no-print" style="margin-top: 24px;">
-        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;">（選填）若需將報告寄至 Email，請填寫以下資料：</p>
-        <div class="field">
-          <label for="email">Email</label>
-          <input type="email" id="email" placeholder="您的 Email" autocomplete="email">
-        </div>
-        <div class="consent-box">
-          <label class="consent-label">
-            <input type="checkbox" id="consent" aria-describedby="consent-desc">
-            <span id="consent-desc" class="consent-text">我同意診所將氣喘控制測驗報告寄至上述 Email，並同意診所於日後以該 Email 寄送衛教、活動或相關資訊給我。</span>
-          </label>
-        </div>
-        <p class="pdf-note">送出後報告將自動寄至您的 Email，並記錄至診所 Google 試算表供追蹤。</p>
-        <button type="button" class="btn btn-primary" id="submit-report" style="margin-top: 12px;">送出並寄送報告至 Email</button>
-        <p id="sheet-status" style="font-size: 0.85rem; margin-top: 8px; color: var(--text-muted);"></p>
+        <p id="save-status" style="font-size: 0.9rem; margin-top: 16px; color: var(--text-muted);"></p>
       </div>
 
       <div class="print-only" id="pdf-content" style="display: none;">
@@ -506,6 +563,37 @@
 
       <button type="button" class="btn btn-secondary no-print" id="back-btn" style="margin-top: 16px; background: var(--dark);">再測一次（回到第一頁）</button>
     </div>
+
+    <!-- 第四頁：管理模式 -->
+    <div id="page-nurse" class="page-section no-print">
+      <div class="btn-row" style="margin-bottom: 16px;">
+        <button type="button" class="btn btn-secondary" id="btn-nurse-back">← 回到首頁</button>
+        <button type="button" class="btn btn-primary" id="btn-nurse-refresh" style="flex:0 0 auto; width: auto;">重新整理</button>
+      </div>
+      <div class="start-card">
+        <h2 style="font-size: 1.2rem; color: var(--dark); margin-bottom: 4px;">管理模式</h2>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;">今日完成氣喘測驗的病患列表，可補填 Peak Flow。</p>
+        <div id="nurse-list-container">
+          <p style="color: var(--text-muted);">載入中…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Peak Flow 編輯 Modal -->
+    <div id="pf-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center;">
+      <div style="background:white; border-radius:var(--radius); padding:24px; width:90%; max-width:380px; box-shadow:0 16px 48px rgba(0,0,0,0.2);">
+        <h3 style="font-size:1.1rem; color:var(--dark); margin-bottom:4px;" id="pf-modal-title">編輯 Peak Flow</h3>
+        <p id="pf-modal-patient" style="font-size:0.9rem; color:var(--text-muted); margin-bottom:16px;"></p>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="number" id="pf-modal-input" placeholder="例：320" min="50" max="900" style="flex:1; padding:12px 14px; font-size:1rem; border:2px solid rgba(71,96,122,0.25); border-radius:10px; font-family:inherit;">
+          <span style="font-size:0.9rem; color:var(--text-muted);">L/min</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:16px; justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" id="pf-modal-cancel" style="width:auto; padding:10px 20px;">取消</button>
+          <button type="button" class="btn btn-primary" id="pf-modal-save" style="width:auto; padding:10px 20px;">儲存</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -513,9 +601,12 @@
       // ═══ 設定：請換成您的 Google Apps Script 網路應用程式網址 ═══
       var GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyK3AanqxlBZcmmOwt3boAtxHY-anpRnBW3g5Dq3HSCSrSuI3LBCgffHk9e4Y4tvLmiKA/exec'; // 例：'https://script.google.com/macros/s/xxxxx/exec'
 
+      var NURSE_PIN = '3613'; // Configurable nurse mode PIN
+
       var pageStart = document.getElementById('page-start');
       var pageQuiz = document.getElementById('page-quiz');
       var pageResult = document.getElementById('page-result');
+      var pageNurse = document.getElementById('page-nurse');
       var startNameInput = document.getElementById('start-name');
       var startAgeSelect = document.getElementById('start-age');
       var btnStartQuiz = document.getElementById('btn-start-quiz');
@@ -532,32 +623,185 @@
       var scoreLabel = document.getElementById('score-label');
       var emailInput = document.getElementById('email');
       var consentCheckbox = document.getElementById('consent');
-      var submitReportBtn = document.getElementById('submit-report');
-      var autoSaveStatus = document.getElementById('auto-save-status');
       var backBtn = document.getElementById('back-btn');
-      var sheetStatus = document.getElementById('sheet-status');
 
       var currentMode = 'child';
       var startName = '';
       var startAgeGroup = '';
+      var startBirthdayROC = '';
+      var startChartNumber = '';
+      var startPatientId = '';
       var lastScore = 0;
       var lastLevel = {};
       var lastTestType = 'C-ACT';
-      var weatherData = { temp: null, humidity: null, suggestion: '' };
+      var weatherData = { temp: null, humidity: null, aqi: null, aqiLevel: null, suggestion: '' };
+
+      // ── ROC birthday dropdowns ──
+      var rocYearSelect = document.getElementById('start-roc-year');
+      var monthSelect = document.getElementById('start-month');
+      var daySelect = document.getElementById('start-day');
+      var birthdayWestern = document.getElementById('birthday-western');
+      var chartInput = document.getElementById('start-chart');
+
+      var currentROCYear = new Date().getFullYear() - 1911;
+      for (var y = currentROCYear; y >= 1; y--) {
+        var opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = '民國 ' + y + ' 年';
+        rocYearSelect.appendChild(opt);
+      }
+      for (var m = 1; m <= 12; m++) {
+        var opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m + ' 月';
+        monthSelect.appendChild(opt);
+      }
+      function updateDays() {
+        var ry = parseInt(rocYearSelect.value) || 0;
+        var mo = parseInt(monthSelect.value) || 0;
+        var prevDay = daySelect.value;
+        daySelect.innerHTML = '<option value="">日</option>';
+        var maxDays = 31;
+        if (ry && mo) {
+          maxDays = new Date(ry + 1911, mo, 0).getDate();
+        }
+        for (var d = 1; d <= maxDays; d++) {
+          var opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d + ' 日';
+          daySelect.appendChild(opt);
+        }
+        if (prevDay && parseInt(prevDay) <= maxDays) daySelect.value = prevDay;
+        updateBirthdayDisplay();
+      }
+      function updateBirthdayDisplay() {
+        var ry = rocYearSelect.value;
+        var mo = monthSelect.value;
+        var dy = daySelect.value;
+        if (ry && mo && dy) {
+          birthdayWestern.textContent = '西元 ' + (parseInt(ry) + 1911) + ' 年 ' + mo + ' 月 ' + dy + ' 日';
+        } else {
+          birthdayWestern.textContent = '';
+        }
+        // Auto-select age group based on birthday
+        if (ry && mo && dy) {
+          var birthDate = new Date(parseInt(ry) + 1911, parseInt(mo) - 1, parseInt(dy));
+          var today = new Date();
+          var age = today.getFullYear() - birthDate.getFullYear();
+          var mDiff = today.getMonth() - birthDate.getMonth();
+          if (mDiff < 0 || (mDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+          if (age >= 4 && age <= 11) {
+            startAgeSelect.value = 'child';
+          } else if (age >= 12) {
+            startAgeSelect.value = 'adult';
+          }
+        }
+      }
+      rocYearSelect.addEventListener('change', updateDays);
+      monthSelect.addEventListener('change', updateDays);
+      daySelect.addEventListener('change', updateBirthdayDisplay);
 
       function showPage(page) {
         pageStart.classList.remove('active');
         pageQuiz.classList.remove('active');
         pageResult.classList.remove('active');
+        pageNurse.classList.remove('active');
         page.classList.add('active');
       }
 
+      // ── Nurse Mode ──
+      document.getElementById('btn-nurse-mode').addEventListener('click', function() {
+        var pin = prompt('請輸入護理師密碼：');
+        if (pin === NURSE_PIN) {
+          showPage(pageNurse);
+          loadNurseList();
+        } else if (pin !== null) {
+          alert('密碼錯誤。');
+        }
+      });
+      document.getElementById('btn-nurse-back').addEventListener('click', function() { showPage(pageStart); });
+      document.getElementById('btn-nurse-refresh').addEventListener('click', loadNurseList);
+
+      var nurseEditingRow = null; // sheet row index being edited
+
+      function loadNurseList() {
+        var container = document.getElementById('nurse-list-container');
+        container.innerHTML = '<p style="color:var(--text-muted);">載入中…</p>';
+        // Fetch today's records via Apps Script
+        var url = GOOGLE_SCRIPT_URL.split('?')[0] + '?mode=nurse_list';
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .catch(function() { return { rows: [] }; })
+          .then(function(data) {
+            if (!data.rows || !data.rows.length) {
+              container.innerHTML = '<p style="color:var(--text-muted);">今日尚無測驗記錄。</p>';
+              return;
+            }
+            var html = '';
+            data.rows.forEach(function(r) {
+              var levelColor = r.levelKey === 'good' ? 'var(--green)' : r.levelKey === 'partial' ? 'var(--yellow)' : 'var(--red)';
+              var pfText = r.peakFlow ? r.peakFlow + ' L/min' : '＋ 填入 PF';
+              var pfClass = r.peakFlow ? '' : 'empty';
+              html += '<div class="nurse-row" data-row="' + r.rowIndex + '" data-name="' + (r.name || '') + '">' +
+                '<span class="nr-name">' + (r.name || '—') + '</span>' +
+                '<span class="nr-chart">' + (r.chart || '—') + '</span>' +
+                '<span class="nr-score" style="color:' + levelColor + ';">' + (r.score || '—') + '</span>' +
+                '<span class="nr-level" style="color:' + levelColor + ';">' + (r.level || '') + '</span>' +
+                '<span class="nr-pf ' + pfClass + '">' + pfText + '</span>' +
+                '</div>';
+            });
+            container.innerHTML = html;
+            // Attach click handlers
+            container.querySelectorAll('.nurse-row').forEach(function(row) {
+              row.addEventListener('click', function() {
+                nurseEditingRow = parseInt(this.getAttribute('data-row'));
+                var name = this.getAttribute('data-name');
+                document.getElementById('pf-modal-patient').textContent = name;
+                document.getElementById('pf-modal-input').value = '';
+                var modal = document.getElementById('pf-modal');
+                modal.style.display = 'flex';
+              });
+            });
+          });
+      }
+
+      // PF Modal handlers
+      document.getElementById('pf-modal-cancel').addEventListener('click', function() {
+        document.getElementById('pf-modal').style.display = 'none';
+      });
+      document.getElementById('pf-modal-save').addEventListener('click', function() {
+        var val = document.getElementById('pf-modal-input').value;
+        if (!val || isNaN(val) || parseInt(val) < 50 || parseInt(val) > 900) {
+          alert('請輸入有效的 Peak Flow 數值（50-900 L/min）。');
+          return;
+        }
+        var url = GOOGLE_SCRIPT_URL.split('?')[0] +
+          '?mode=update_pf&rowIndex=' + nurseEditingRow +
+          '&peakFlow=' + encodeURIComponent(val);
+        fetch(url)
+          .then(function() {
+            document.getElementById('pf-modal').style.display = 'none';
+            loadNurseList(); // refresh
+          })
+          .catch(function() {
+            alert('儲存失敗，請稍後再試。');
+          });
+      });
+
       btnStartQuiz.addEventListener('click', function() {
         var name = (startNameInput.value || '').trim();
+        var ry = rocYearSelect.value;
+        var mo = monthSelect.value;
+        var dy = daySelect.value;
         var age = startAgeSelect.value;
+        var chart = (chartInput.value || '').trim();
         if (!name) {
           alert('請輸入姓名。');
           startNameInput.focus();
+          return;
+        }
+        if (!ry || !mo || !dy) {
+          alert('請選擇完整出生日期。');
           return;
         }
         if (!age) {
@@ -567,6 +811,9 @@
         }
         startName = name;
         startAgeGroup = age;
+        startBirthdayROC = ry + '/' + String(mo).padStart(2, '0') + '/' + String(dy).padStart(2, '0');
+        startChartNumber = chart;
+        startPatientId = chart ? 'CHART-' + chart : 'NAME-' + name + '-DOB-' + startBirthdayROC;
         currentMode = age;
         cactSection.classList.toggle('hidden', age !== 'child');
         actSection.classList.toggle('hidden', age !== 'adult');
@@ -579,43 +826,108 @@
         showPage(pageStart);
       });
 
+      function getAQILevel(aqi) {
+        if (aqi <= 50) return { level: 'good', label: '良好', color: '#22c55e' };
+        if (aqi <= 100) return { level: 'moderate', label: '普通', color: '#eab308' };
+        if (aqi <= 150) return { level: 'unhealthySensitive', label: '對敏感族群不健康', color: '#f97316' };
+        if (aqi <= 200) return { level: 'unhealthy', label: '不健康', color: '#ef4444' };
+        if (aqi <= 300) return { level: 'veryUnhealthy', label: '非常不健康', color: '#a855f7' };
+        return { level: 'hazardous', label: '危害', color: '#7c2d12' };
+      }
+
       function loadWeather() {
-        var url = 'https://api.open-meteo.com/v1/forecast?latitude=22.6273&longitude=120.3014&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FTaipei';
-        fetch(url)
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            var cur = data.current;
+        var weatherUrl = 'https://api.open-meteo.com/v1/forecast?latitude=22.6273&longitude=120.3014&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FTaipei';
+        var aqiUrl = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=22.6273&longitude=120.3014&current=us_aqi,pm10,pm2_5&timezone=Asia%2FTaipei';
+        
+        Promise.all([
+          fetch(weatherUrl).then(function(r) { return r.json(); }),
+          fetch(aqiUrl).then(function(r) { return r.json(); })
+        ])
+          .then(function(results) {
+            var weatherData_result = results[0];
+            var aqiData = results[1];
+            
+            var cur = weatherData_result.current;
             var temp = Math.round(cur.temperature_2m);
             var hum = cur.relative_humidity_2m;
+            var aqi = aqiData.current ? Math.round(aqiData.current.us_aqi) : null;
+            var pm25 = aqiData.current ? Math.round(aqiData.current.pm2_5) : null;
+            var pm10 = aqiData.current ? Math.round(aqiData.current.pm10) : null;
+            
             weatherData.temp = temp;
             weatherData.humidity = hum;
+            weatherData.aqi = aqi;
+            weatherData.pm25 = pm25;
+            weatherData.pm10 = pm10;
+            
+            var aqiInfo = aqi !== null ? getAQILevel(aqi) : null;
+            weatherData.aqiLevel = aqiInfo ? aqiInfo.label : null;
+            
             var suggestions = [];
+            
+            // AQI 建議
+            if (aqi !== null) {
+              if (aqi <= 50) {
+                suggestions.push('空氣品質良好，適合戶外活動。');
+              } else if (aqi <= 100) {
+                suggestions.push('空氣品質普通，一般民眾可正常活動，但敏感族群（如氣喘患者）應減少長時間戶外活動。');
+              } else if (aqi <= 150) {
+                suggestions.push('空氣品質對敏感族群不健康，建議減少戶外活動，外出請配戴口罩。');
+              } else if (aqi <= 200) {
+                suggestions.push('空氣品質不健康，所有人應減少戶外活動，氣喘患者應避免外出，必要時請配戴口罩。');
+              } else {
+                suggestions.push('空氣品質非常不健康，請避免戶外活動，氣喘患者應待在室內並關閉門窗，使用空氣清淨機。');
+              }
+            }
+            
+            // 濕度建議
             if (hum >= 75) {
-              suggestions.push('今日濕度較高（' + hum + '%），塵蟎與黴菌較易滋生，建議除濕、保持通風，過敏與氣喘患者請留意環境。');
+              suggestions.push('今日濕度較高（' + hum + '%），塵蟎與黴菌較易滋生，建議除濕、保持通風。');
             } else if (hum >= 60) {
               suggestions.push('濕度適中偏高，若為塵蟎過敏可注意寢具清潔與除濕。');
             }
+            
+            // 溫度建議
             if (temp >= 32) {
               suggestions.push('氣溫較高，戶外活動請注意補充水分、避免長時間曝曬。');
             } else if (temp <= 18) {
               suggestions.push('早晚偏涼，注意保暖，冷空氣可能誘發氣喘，外出可戴口罩。');
             }
+            
             if (suggestions.length === 0) {
               suggestions.push('今日天氣對氣喘病友較為友善，請持續規律用藥與追蹤。');
             }
+            
             weatherData.suggestion = suggestions.join(' ');
-            document.getElementById('weather-content').innerHTML =
-              '<div class="weather-row">' +
+            
+            // 建立顯示內容
+            var weatherHtml = '<div class="weather-row">' +
               '<span class="weather-item"><span>溫度</span>' + temp + '°C</span>' +
-              '<span class="weather-item"><span>濕度</span>' + hum + '%</span>' +
-              '</div>';
+              '<span class="weather-item"><span>濕度</span>' + hum + '%</span>';
+            
+            if (aqi !== null) {
+              var aqiColor = aqiInfo ? aqiInfo.color : '#64748b';
+              weatherHtml += '<span class="weather-item"><span>AQI</span><span style="color: ' + aqiColor + '; font-weight: 600;">' + aqi + '</span> <span style="font-size: 0.85rem; opacity: 0.9;">(' + (aqiInfo ? aqiInfo.label : '未知') + ')</span></span>';
+            }
+            
+            weatherHtml += '</div>';
+            
+            if (pm25 !== null || pm10 !== null) {
+              weatherHtml += '<div class="weather-row" style="margin-top: 8px; font-size: 0.9rem; opacity: 0.9;">';
+              if (pm25 !== null) weatherHtml += '<span>PM2.5: ' + pm25 + ' μg/m³</span>';
+              if (pm10 !== null) weatherHtml += '<span style="margin-left: 12px;">PM10: ' + pm10 + ' μg/m³</span>';
+              weatherHtml += '</div>';
+            }
+            
+            document.getElementById('weather-content').innerHTML = weatherHtml;
             document.getElementById('weather-content').classList.remove('weather-loading');
             var sugEl = document.getElementById('weather-suggestion');
             sugEl.textContent = '💡 ' + weatherData.suggestion;
             sugEl.classList.remove('hidden');
           })
-          .catch(function() {
-            document.getElementById('weather-content').innerHTML = '無法取得天氣，請稍後再試。';
+          .catch(function(err) {
+            console.error('Weather/AQI fetch error:', err);
+            document.getElementById('weather-content').innerHTML = '無法取得天氣或空氣品質數據，請稍後再試。';
             document.getElementById('weather-content').classList.remove('weather-loading');
           });
       }
@@ -699,24 +1011,66 @@
           testType = 'ACT';
           scoreRange = '滿分 25';
         }
+        
+        // 驗證 Email 和同意條款
+        var email = (emailInput.value || '').trim();
+        if (!email) {
+          alert('請輸入 Email。');
+          emailInput.focus();
+          return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          alert('請輸入有效的 Email。');
+          emailInput.focus();
+          return;
+        }
+        if (!consentCheckbox.checked) {
+          alert('請勾選同意條款後再查看結果。');
+          consentCheckbox.focus();
+          return;
+        }
+        
+        // 儲存分數和等級
+        lastScore = score;
+        lastLevel = level;
+        lastTestType = testType;
+        
+        // 更新並顯示結果
         resultGreeting.textContent = startName + ' 您好，以下是您的測驗結果：';
-        showPage(pageResult);
         updateResult(score, level, testType, scoreRange);
-        autoSaveStatus.textContent = '正在儲存至診所試算表…';
-        autoSaveStatus.style.color = '';
-        saveToSheet(function(ok, msg) {
+        
+        // 顯示結果頁面
+        showPage(pageResult);
+        
+        // 保存並寄送報告（只執行一次）
+        submitBtn.disabled = true;
+        document.getElementById('save-status').textContent = '正在寄送報告至您的 Email 並儲存結果…';
+        document.getElementById('save-status').style.color = '';
+        
+        sendReportAndSave(email, function(ok, msg) {
+          submitBtn.disabled = false;
           if (ok) {
-            autoSaveStatus.textContent = '已自動儲存至診所 Google 試算表。';
-            autoSaveStatus.style.color = 'var(--green)';
+            document.getElementById('save-status').textContent = '報告已寄至您的 Email，請查收。結果已儲存至診所 Google 試算表。';
+            document.getElementById('save-status').style.color = 'var(--green)';
           } else {
-            autoSaveStatus.textContent = msg || '儲存失敗，請檢查設定。';
-            autoSaveStatus.style.color = 'var(--red)';
+            document.getElementById('save-status').textContent = msg || '送出失敗，請檢查設定或稍後再試。';
+            document.getElementById('save-status').style.color = 'var(--red)';
           }
         });
       });
 
       btnBackToQuiz.addEventListener('click', function() {
         showPage(pageQuiz);
+        // 重置 Email 和同意條款狀態
+        emailInput.value = '';
+        consentCheckbox.checked = false;
+        submitBtn.disabled = false;
+        document.getElementById('peak-flow-input').value = '';
+        var saveStatusEl = document.getElementById('save-status');
+        if (saveStatusEl) {
+          saveStatusEl.textContent = '';
+          saveStatusEl.style.color = '';
+        }
       });
 
       document.querySelectorAll('.option').forEach(function(el) {
@@ -742,6 +1096,9 @@
         var params = {
           action: 'finish',
           name: startName,
+          birthday: startBirthdayROC,
+          chartNumber: startChartNumber,
+          patientId: startPatientId,
           ageGroup: startAgeGroup,
           testType: lastTestType,
           score: String(lastScore),
@@ -783,6 +1140,10 @@
         var base = GOOGLE_SCRIPT_URL.split('?')[0];
         var params = {
           name: startName,
+          birthday: startBirthdayROC,
+          chartNumber: startChartNumber,
+          patientId: startPatientId,
+          ageGroup: startAgeGroup,
           email: email,
           consent: consentCheckbox.checked ? 'yes' : 'no',
           testType: lastTestType,
@@ -793,7 +1154,12 @@
           timestamp: new Date().toISOString(),
           temp: weatherData.temp != null ? String(weatherData.temp) : '',
           humidity: weatherData.humidity != null ? String(weatherData.humidity) : '',
-          weatherSuggestion: (weatherData.suggestion || '').substring(0, 300)
+          aqi: weatherData.aqi != null ? String(weatherData.aqi) : '',
+          aqiLevel: weatherData.aqiLevel || '',
+          pm25: weatherData.pm25 != null ? String(weatherData.pm25) : '',
+          pm10: weatherData.pm10 != null ? String(weatherData.pm10) : '',
+          weatherSuggestion: (weatherData.suggestion || '').substring(0, 300),
+          peakFlow: (document.getElementById('peak-flow-input').value || '').trim()
         };
         var iframe = document.createElement('iframe');
         iframe.style.display = 'none';
@@ -818,49 +1184,30 @@
         }, 2500);
       }
 
-      submitReportBtn.addEventListener('click', function() {
-        var email = (emailInput.value || '').trim();
-        if (!email) {
-          alert('請輸入 Email。');
-          emailInput.focus();
-          return;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          alert('請輸入有效的 Email。');
-          emailInput.focus();
-          return;
-        }
-        if (!consentCheckbox.checked) {
-          alert('請勾選同意條款後再送出。');
-          consentCheckbox.focus();
-          return;
-        }
-        submitReportBtn.disabled = true;
-        sheetStatus.textContent = '正在寄送報告至您的 Email 並儲存結果…';
-        sendReportAndSave(email, function(ok, msg) {
-          submitReportBtn.disabled = false;
-          if (ok) {
-            sheetStatus.textContent = '報告已寄至您的 Email，請查收。';
-            sheetStatus.style.color = 'var(--green)';
-          } else {
-            sheetStatus.textContent = msg || '送出失敗，請檢查設定或稍後再試。';
-            sheetStatus.style.color = 'var(--red)';
-          }
-        });
-      });
 
       backBtn.addEventListener('click', function() {
         showPage(pageStart);
         document.querySelectorAll('input[type="radio"]').forEach(function(r) { r.checked = false; });
         document.querySelectorAll('.option').forEach(function(o) { o.classList.remove('selected'); });
         startNameInput.value = '';
+        rocYearSelect.value = '';
+        monthSelect.value = '';
+        daySelect.innerHTML = '<option value="">日</option>';
+        birthdayWestern.textContent = '';
+        chartInput.value = '';
         startAgeSelect.value = '';
+        startBirthdayROC = '';
+        startChartNumber = '';
+        startPatientId = '';
         emailInput.value = '';
         consentCheckbox.checked = false;
-        sheetStatus.textContent = '';
-        sheetStatus.style.color = '';
-        autoSaveStatus.textContent = '';
-        autoSaveStatus.style.color = '';
+        document.getElementById('peak-flow-input').value = '';
+        var saveStatusEl = document.getElementById('save-status');
+        if (saveStatusEl) {
+          saveStatusEl.textContent = '';
+          saveStatusEl.style.color = '';
+        }
+        submitBtn.disabled = false;
       });
     })();
   </script>
