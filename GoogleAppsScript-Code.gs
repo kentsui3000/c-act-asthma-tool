@@ -160,12 +160,12 @@ function buildReportHtml(name, testType, score, level, levelDesc, weatherSuggest
   if (level.indexOf('不佳') >= 0) levelColor = '#ef4444';
 
   var suggestion = weatherSuggestion
-    ? '<p style="margin:12px 0 0;padding:10px;background:#f0f9ff;border-radius:8px;font-size:14px;color:#0c4a6e;">&#9728; 今日建議：' + weatherSuggestion + '</p>'
+    ? '<p style="margin:12px 0 0;padding:10px;background:#f0f9ff;border-radius:8px;font-size:14px;color:#0c4a6e;">今日建議：' + weatherSuggestion + '</p>'
     : '';
 
   var ctaHtml = '<div style="background:#FFB640;padding:24px;text-align:center;border-radius:12px;margin-top:20px;">' +
     '<p style="color:#1a1a1a;font-size:16px;font-weight:bold;margin:0 0 12px;">需要專業諮詢？</p>' +
-    '<a href="http://08143.vision.com.tw/Register" style="display:inline-block;background:white;color:#002840;padding:10px 24px;border-radius:24px;text-decoration:none;font-weight:bold;font-size:14px;">&#x1F4C5; 線上掛號</a>' +
+    '<a href="http://08143.vision.com.tw/Register" style="display:inline-block;background:white;color:#002840;padding:10px 24px;border-radius:24px;text-decoration:none;font-weight:bold;font-size:14px;">線上掛號</a>' +
     '<div style="margin-top:12px;">' +
     '<p style="color:#1a1a1a;font-size:13px;font-weight:bold;margin:0;">徐嘉賢診所</p>' +
     '<p style="color:#1a1a1a;font-size:12px;margin:4px 0;">地址：811高雄市楠梓區藍昌路413號</p>' +
