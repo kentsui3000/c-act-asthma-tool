@@ -80,17 +80,64 @@ function doGet(e) {
     ]);
 
     if (email && name) {
+      sendReportEmail(name, email, testType, score, level, levelDesc, weatherSuggestion);
+    }
+  } catch (err) {
+    result = 'error: ' + err.toString();
+  }
+  return ContentService.createTextOutput(result).setMimeType(ContentService.MimeType.TEXT);
+}
+
+
+/**
+ * Send the report email with quota check + error logging.
+ * Never throws — sheet write must not fail because email failed.
+ * Every attempt is appended to the 'Email Log' tab so failures are visible
+ * without having to open the Apps Script executions panel.
+ */
+function sendReportEmail(name, email, testType, score, level, levelDesc, weatherSuggestion) {
+  var status = 'pending';
+  var detail = '';
+  try {
+    var quota = MailApp.getRemainingDailyQuota();
+    if (quota <= 0) {
+      status = 'quota_exhausted';
+      detail = 'remaining_quota=' + quota + ' (Gmail consumer cap is 100/day, resets ~24h after first send)';
+    } else {
       var subject = '【徐嘉賢診所】您的氣喘控制測驗報告 - ' + name;
       var htmlBody = buildReportHtml(name, testType, score, level, levelDesc, weatherSuggestion);
       GmailApp.sendEmail(email, subject, '', {
         htmlBody: htmlBody,
         name: '徐嘉賢診所'
       });
+      status = 'sent';
+      detail = 'quota_remaining_after=' + (quota - 1);
     }
-  } catch (err) {
-    result = 'error: ' + err.toString();
+  } catch (mailErr) {
+    status = 'failed';
+    detail = String(mailErr);
   }
-  return ContentService.createTextOutput(result).setMimeType(ContentService.MimeType.TEXT);
+  logEmailAttempt(name, email, testType, score, status, detail);
+}
+
+
+/**
+ * Append one row to the 'Email Log' tab. Creates the tab on first call.
+ * Wrapped in try/catch so logging failure never breaks the submission.
+ */
+function logEmailAttempt(name, email, testType, score, status, detail) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Email Log');
+    if (!sheet) {
+      sheet = ss.insertSheet('Email Log');
+      sheet.appendRow(['Timestamp', 'Name', 'Email', 'TestType', 'Score', 'Status', 'Detail']);
+      sheet.setFrozenRows(1);
+    }
+    sheet.appendRow([new Date(), name, email, testType, score, status, detail]);
+  } catch (e) {
+    // Silent — never break the main submission flow
+  }
 }
 
 
