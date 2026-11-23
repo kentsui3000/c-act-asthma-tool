@@ -525,15 +525,7 @@
         </div>
         <p id="score-detail" style="font-size: 0.95rem; color: var(--text-muted); margin-top: 12px;"></p>
 
-        <!-- Peak Flow (optional, filled by nurse) -->
-        <div style="margin-top: 20px; padding-top: 16px; border-top: 2px dashed rgba(71,96,122,0.2);">
-          <label for="peak-flow-input" style="font-weight: 500; font-size: 0.95rem;">尖峰呼氣流量 Peak Flow（選填，由護理師輸入）</label>
-          <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
-            <input type="number" id="peak-flow-input" placeholder="例：320" min="50" max="900" style="flex:1; padding: 12px 14px; font-size: 1rem; border: 2px solid rgba(71,96,122,0.25); border-radius: 10px; font-family: inherit;">
-            <span style="font-size: 0.9rem; color: var(--text-muted); white-space: nowrap;">L/min</span>
-          </div>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">護理師可在此輸入尖峰呼氣流量數值，此欄位為選填。</p>
-        </div>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 20px;">尖峰呼氣流量 Peak Flow 請由護理師在「管理模式」確認記錄後補登。</p>
 
         <p id="save-status" style="font-size: 0.9rem; margin-top: 16px; color: var(--text-muted);"></p>
       </div>
@@ -565,7 +557,7 @@
       </div>
       <div class="start-card">
         <h2 style="font-size: 1.2rem; color: var(--dark); margin-bottom: 4px;">管理模式</h2>
-        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;">今日完成氣喘測驗的病患列表，可補填 Peak Flow。</p>
+        <p id="nurse-list-date" style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;">今日完成氣喘測驗的病患列表，可補填 Peak Flow。</p>
         <div id="nurse-list-container">
           <p style="color: var(--text-muted);">載入中…</p>
         </div>
@@ -581,6 +573,7 @@
           <input type="number" id="pf-modal-input" placeholder="例：320" min="50" max="900" style="flex:1; padding:12px 14px; font-size:1rem; border:2px solid rgba(71,96,122,0.25); border-radius:10px; font-family:inherit;">
           <span style="font-size:0.9rem; color:var(--text-muted);">L/min</span>
         </div>
+        <p id="pf-modal-status" role="status" aria-live="polite" style="font-size:0.9rem; margin-top:12px;"></p>
         <div style="display:flex; gap:8px; margin-top:16px; justify-content:flex-end;">
           <button type="button" class="btn btn-secondary" id="pf-modal-cancel" style="width:auto; padding:10px 20px;">取消</button>
           <button type="button" class="btn btn-primary" id="pf-modal-save" style="width:auto; padding:10px 20px;">儲存</button>
@@ -594,7 +587,8 @@
       // ═══ 設定：請換成您的 Google Apps Script 網路應用程式網址 ═══
       var GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyK3AanqxlBZcmmOwt3boAtxHY-anpRnBW3g5Dq3HSCSrSuI3LBCgffHk9e4Y4tvLmiKA/exec'; // 例：'https://script.google.com/macros/s/xxxxx/exec'
 
-      var NURSE_PIN = '3613'; // Configurable nurse mode PIN
+      // Staff credentials stay in memory and are verified by the backend.
+      var nurseState = { pin: '', session: 0, listRequest: 0, saveRequest: 0, editing: null, saving: false };
 
       var pageStart = document.getElementById('page-start');
       var pageQuiz = document.getElementById('page-quiz');
@@ -720,80 +714,200 @@
       // ── Nurse Mode ──
       document.getElementById('btn-nurse-mode').addEventListener('click', function() {
         var pin = prompt('請輸入護理師密碼：');
-        if (pin === NURSE_PIN) {
-          showPage(pageNurse);
-          loadNurseList();
-        } else if (pin !== null) {
-          alert('密碼錯誤。');
-        }
+        if (pin === null || !pin.trim()) return;
+        nurseState.pin = pin.trim();
+        nurseState.session++;
+        nurseState.editing = null;
+        showPage(pageNurse);
+        loadNurseList();
       });
-      document.getElementById('btn-nurse-back').addEventListener('click', function() { showPage(pageStart); });
-      document.getElementById('btn-nurse-refresh').addEventListener('click', loadNurseList);
-
-      var nurseEditingRow = null; // sheet row index being edited
-
-      function loadNurseList() {
-        var container = document.getElementById('nurse-list-container');
-        container.innerHTML = '<p style="color:var(--text-muted);">載入中…</p>';
-        // Fetch today's records via Apps Script
-        var url = GOOGLE_SCRIPT_URL.split('?')[0] + '?mode=nurse_list';
-        fetch(url)
-          .then(function(r) { return r.json(); })
-          .catch(function() { return { rows: [] }; })
-          .then(function(data) {
-            if (!data.rows || !data.rows.length) {
-              container.innerHTML = '<p style="color:var(--text-muted);">今日尚無測驗記錄。</p>';
-              return;
-            }
-            var html = '';
-            data.rows.forEach(function(r) {
-              var levelColor = r.levelKey === 'good' ? 'var(--green)' : r.levelKey === 'partial' ? 'var(--yellow)' : 'var(--red)';
-              var pfText = r.peakFlow ? r.peakFlow + ' L/min' : '＋ 填入 PF';
-              var pfClass = r.peakFlow ? '' : 'empty';
-              html += '<div class="nurse-row" data-row="' + r.rowIndex + '" data-name="' + (r.name || '') + '">' +
-                '<span class="nr-name">' + (r.name || '—') + '</span>' +
-                '<span class="nr-chart">' + (r.chart || '—') + '</span>' +
-                '<span class="nr-score" style="color:' + levelColor + ';">' + (r.score || '—') + '</span>' +
-                '<span class="nr-level" style="color:' + levelColor + ';">' + (r.level || '') + '</span>' +
-                '<span class="nr-pf ' + pfClass + '">' + pfText + '</span>' +
-                '</div>';
-            });
-            container.innerHTML = html;
-            // Attach click handlers
-            container.querySelectorAll('.nurse-row').forEach(function(row) {
-              row.addEventListener('click', function() {
-                nurseEditingRow = parseInt(this.getAttribute('data-row'));
-                var name = this.getAttribute('data-name');
-                document.getElementById('pf-modal-patient').textContent = name;
-                document.getElementById('pf-modal-input').value = '';
-                var modal = document.getElementById('pf-modal');
-                modal.style.display = 'flex';
-              });
-            });
-          });
-      }
-
-      // PF Modal handlers
-      document.getElementById('pf-modal-cancel').addEventListener('click', function() {
+      document.getElementById('btn-nurse-back').addEventListener('click', function() {
+        nurseState.pin = '';
+        nurseState.session++;
+        nurseState.listRequest++;
+        nurseState.saveRequest++;
+        nurseState.editing = null;
+        setPfBusy(false);
         document.getElementById('pf-modal').style.display = 'none';
+        document.getElementById('pf-modal-input').value = '';
+        setPfStatus('', false);
+        document.getElementById('nurse-list-container').replaceChildren();
+        showPage(pageStart);
       });
+      document.getElementById('btn-nurse-refresh').addEventListener('click', loadNurseList);
+      function setPfBusy(busy) {
+        nurseState.saving = busy;
+        document.getElementById('pf-modal-save').disabled = busy;
+        document.getElementById('pf-modal-cancel').disabled = busy;
+        document.getElementById('pf-modal-input').disabled = busy;
+      }
+      function setPfStatus(message, failed) {
+        var status = document.getElementById('pf-modal-status');
+        status.textContent = message;
+        status.style.color = failed ? 'var(--red)' : 'var(--text-muted)';
+      }
+      function closePfModal() {
+        if (nurseState.saving) return;
+        nurseState.editing = null;
+        nurseState.saveRequest++;
+        document.getElementById('pf-modal').style.display = 'none';
+        document.getElementById('pf-modal-input').value = '';
+        setPfStatus('', false);
+      }
+      function nurseError(message, code) {
+        var error = new Error(message);
+        error.code = code;
+        return error;
+      }
+      function nurseRequest(mode, fields) {
+        var controller = new AbortController();
+        var timeout = setTimeout(function() { controller.abort(); }, 20000);
+        var body = new URLSearchParams();
+        body.set('mode', mode);
+        body.set('pin', nurseState.pin);
+        Object.keys(fields || {}).forEach(function(key) { body.set(key, fields[key]); });
+        return fetch(GOOGLE_SCRIPT_URL.split('?')[0], {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+          body: body.toString(),
+          redirect: 'follow',
+          credentials: 'omit',
+          signal: controller.signal
+        }).then(function(response) {
+          return response.text().then(function(text) {
+            if (response.status === 403 || /accounts\.google\.com/.test(response.url || '') || /^\s*</.test(text)) {
+              throw nurseError('Google 服務尚未授權或登入已失效，請診所管理員重新授權 Apps Script 後再試。', 'GOOGLE_AUTH');
+            }
+            if (!response.ok) throw nurseError('連線失敗（HTTP ' + response.status + '），請稍後再試。', 'HTTP_ERROR');
+            if (!/application\/json/i.test(response.headers.get('content-type') || '')) {
+              throw nurseError('服務回應格式不符，請確認 Apps Script 已更新部署。', 'INVALID_RESPONSE');
+            }
+            var data;
+            try { data = JSON.parse(text); } catch (error) {
+              throw nurseError('服務回應無法解析，請稍後再試。', 'INVALID_RESPONSE');
+            }
+            if (!data || data.apiVersion !== 2 || typeof data.ok !== 'boolean') {
+              throw nurseError('服務版本不符，請確認 Apps Script 已更新部署。', 'INVALID_RESPONSE');
+            }
+            if (!data.ok) throw nurseError(data.error && data.error.message || '操作失敗，請稍後再試。', data.error && data.error.code || 'BACKEND_ERROR');
+            return data;
+          });
+        }).catch(function(error) {
+          if (error.name === 'AbortError') throw nurseError('連線逾時，尚無法確認操作結果，請重新整理確認後再試。', 'TIMEOUT');
+          if (error.code) throw error;
+          throw nurseError('無法連線至 Google 服務，請檢查網路；若持續失敗，請管理員確認 Apps Script 授權。', 'NETWORK_ERROR');
+        }).finally(function() { clearTimeout(timeout); });
+      }
+      function setNurseMessage(message, failed) {
+        var container = document.getElementById('nurse-list-container');
+        container.replaceChildren();
+        var paragraph = document.createElement('p');
+        paragraph.textContent = message;
+        paragraph.style.color = failed ? 'var(--red)' : 'var(--text-muted)';
+        if (failed) paragraph.setAttribute('role', 'alert');
+        container.appendChild(paragraph);
+      }
+      function renderNurseRows(rows) {
+        var container = document.getElementById('nurse-list-container');
+        container.replaceChildren();
+        rows.forEach(function(record) {
+          var row = document.createElement('div');
+          row.className = 'nurse-row';
+          row.setAttribute('role', 'button');
+          row.tabIndex = 0;
+          var color = record.levelKey === 'good' ? 'var(--green)' : record.levelKey === 'partial' ? 'var(--yellow)' : 'var(--red)';
+          var hasPf = record.peakFlow !== '' && record.peakFlow != null;
+          [
+            ['nr-name', record.name || '—'],
+            ['nr-chart', record.chart || '—'],
+            ['nr-score', record.score == null || record.score === '' ? '—' : record.score, color],
+            ['nr-level', record.level || '', color],
+            ['nr-pf' + (hasPf ? '' : ' empty'), hasPf ? record.peakFlow + ' L/min' : '＋ 填入 PF']
+          ].forEach(function(field) {
+            var span = document.createElement('span');
+            span.className = field[0];
+            span.textContent = String(field[1]);
+            if (field[2]) span.style.color = field[2];
+            row.appendChild(span);
+          });
+          function openEditor() {
+            if (nurseState.saving || !nurseState.pin) return;
+            nurseState.editing = { rowIndex: record.rowIndex, rowKey: record.rowKey, oldValue: record.peakFlow };
+            nurseState.saveRequest++;
+            document.getElementById('pf-modal-patient').textContent = record.name || '—';
+            document.getElementById('pf-modal-input').value = hasPf ? String(record.peakFlow) : '';
+            setPfStatus('', false);
+            document.getElementById('pf-modal').style.display = 'flex';
+            document.getElementById('pf-modal-input').focus();
+          }
+          row.addEventListener('click', openEditor);
+          row.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openEditor(); }
+          });
+          container.appendChild(row);
+        });
+      }
+      function loadNurseList() {
+        if (!nurseState.pin) return Promise.resolve(false);
+        var session = nurseState.session;
+        var request = ++nurseState.listRequest;
+        setNurseMessage('載入中…', false);
+        return nurseRequest('nurse_list').then(function(data) {
+          if (session !== nurseState.session || request !== nurseState.listRequest) return null;
+          if (!Array.isArray(data.rows) || !/^\d{4}-\d{2}-\d{2}$/.test(data.date || '') || data.rows.some(function(row) {
+            return !row || !Number.isInteger(row.rowIndex) || row.rowIndex < 2 || typeof row.rowKey !== 'string' || !row.rowKey;
+          })) throw nurseError('記錄格式不符，請確認 Apps Script 已更新部署。', 'INVALID_RESPONSE');
+          document.getElementById('nurse-list-date').textContent = data.date + ' 完成氣喘測驗的病患列表，可補填 Peak Flow。';
+          if (data.rows.length) renderNurseRows(data.rows);
+          else setNurseMessage('今日尚無測驗記錄。', false);
+          if (Number.isInteger(data.invalidTimestampCount) && data.invalidTimestampCount > 0) {
+            if (!data.rows.length) setNurseMessage('今日尚無可確認日期的測驗記錄。', false);
+            var warning = document.createElement('p');
+            warning.textContent = '另有 ' + data.invalidTimestampCount + ' 筆記錄日期無法判讀，請管理員確認。';
+            warning.style.color = 'var(--red)';
+            document.getElementById('nurse-list-container').appendChild(warning);
+          }
+          return true;
+        }).catch(function(error) {
+          if (session !== nurseState.session || request !== nurseState.listRequest) return null;
+          setNurseMessage(error.message, true);
+          return false;
+        });
+      }
+      function validPeakFlow(value) {
+        return /^\d+$/.test(value) && Number.isInteger(Number(value)) && Number(value) >= 50 && Number(value) <= 900;
+      }
+      document.getElementById('pf-modal-cancel').addEventListener('click', closePfModal);
       document.getElementById('pf-modal-save').addEventListener('click', function() {
-        var val = document.getElementById('pf-modal-input').value;
-        if (!val || isNaN(val) || parseInt(val) < 50 || parseInt(val) > 900) {
-          alert('請輸入有效的 Peak Flow 數值（50-900 L/min）。');
+        if (nurseState.saving || !nurseState.editing || !nurseState.pin) return;
+        var value = document.getElementById('pf-modal-input').value.trim();
+        if (!validPeakFlow(value)) {
+          setPfStatus('請輸入有效的 Peak Flow 整數（50–900 L/min）。', true);
           return;
         }
-        var url = GOOGLE_SCRIPT_URL.split('?')[0] +
-          '?mode=update_pf&rowIndex=' + nurseEditingRow +
-          '&peakFlow=' + encodeURIComponent(val);
-        fetch(url)
-          .then(function() {
-            document.getElementById('pf-modal').style.display = 'none';
-            loadNurseList(); // refresh
-          })
-          .catch(function() {
-            alert('儲存失敗，請稍後再試。');
+        var editing = nurseState.editing;
+        var session = nurseState.session;
+        var request = ++nurseState.saveRequest;
+        setPfBusy(true);
+        setPfStatus('正在儲存，請稍候…', false);
+        return nurseRequest('update_pf', { rowIndex: editing.rowIndex, rowKey: editing.rowKey, peakFlow: value }).then(function(data) {
+          if (session !== nurseState.session || request !== nurseState.saveRequest) return;
+          if (data.previousRowKey !== editing.rowKey || typeof data.rowKey !== 'string' || !data.rowKey || data.rowIndex !== editing.rowIndex || data.peakFlow !== Number(value)) {
+            throw nurseError('尚未收到一致的儲存確認，請重新整理確認記錄後再試。', 'ACK_MISMATCH');
+          }
+          editing.rowKey = data.rowKey;
+          editing.oldValue = data.peakFlow;
+          setPfStatus('Peak Flow 已確認儲存：' + data.peakFlow + ' L/min。', false);
+          return loadNurseList().then(function(loaded) {
+            if (session === nurseState.session && request === nurseState.saveRequest && loaded === false) {
+              setPfStatus('Peak Flow 已確認儲存，但列表更新失敗，請重新整理。', false);
+            }
           });
+        }).catch(function(error) {
+          if (session === nurseState.session && request === nurseState.saveRequest) setPfStatus(error.message, true);
+        }).finally(function() {
+          if (session === nurseState.session && request === nurseState.saveRequest) setPfBusy(false);
+        });
       });
 
       btnStartQuiz.addEventListener('click', function() {
@@ -1057,8 +1171,8 @@
         sendReportAndSave(email, function(ok, msg) {
           submitBtn.disabled = false;
           if (ok) {
-            document.getElementById('save-status').textContent = '報告已寄至您的 Email，請查收。結果已儲存至診所 Google 試算表。';
-            document.getElementById('save-status').style.color = 'var(--green)';
+            document.getElementById('save-status').textContent = '已送出請求，尚無法確認儲存與寄信，請護理師在管理模式確認。';
+            document.getElementById('save-status').style.color = 'var(--text-muted)';
           } else {
             document.getElementById('save-status').textContent = msg || '送出失敗，請檢查設定或稍後再試。';
             document.getElementById('save-status').style.color = 'var(--red)';
@@ -1072,7 +1186,6 @@
         emailInput.value = '';
         consentCheckbox.checked = false;
         submitBtn.disabled = false;
-        document.getElementById('peak-flow-input').value = '';
         var saveStatusEl = document.getElementById('save-status');
         if (saveStatusEl) {
           saveStatusEl.textContent = '';
@@ -1094,6 +1207,10 @@
         });
       });
 
+      function taipeiTimestamp() {
+        return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 19) + '+08:00';
+      }
+
       function saveToSheet(callback) {
         if (!GOOGLE_SCRIPT_URL || !GOOGLE_SCRIPT_URL.trim()) {
           if (callback) callback(false, '尚未設定 Google 試算表網址');
@@ -1111,7 +1228,7 @@
           score: String(lastScore),
           level: lastLevel.label,
           levelKey: lastLevel.level,
-          timestamp: new Date().toISOString(),
+          timestamp: taipeiTimestamp(),
           temp: weatherData.temp != null ? String(weatherData.temp) : '',
           humidity: weatherData.humidity != null ? String(weatherData.humidity) : '',
           weatherSuggestion: (weatherData.suggestion || '').substring(0, 300)
@@ -1135,7 +1252,7 @@
         setTimeout(function() {
           document.body.removeChild(form);
           document.body.removeChild(iframe);
-          if (callback) callback(true);
+          if (callback) callback(true, 'submitted-only');
         }, 2000);
       }
 
@@ -1158,15 +1275,14 @@
           level: lastLevel.label,
           levelKey: lastLevel.level,
           levelDesc: lastLevel.desc,
-          timestamp: new Date().toISOString(),
+          timestamp: taipeiTimestamp(),
           temp: weatherData.temp != null ? String(weatherData.temp) : '',
           humidity: weatherData.humidity != null ? String(weatherData.humidity) : '',
           aqi: weatherData.aqi != null ? String(weatherData.aqi) : '',
           aqiLevel: weatherData.aqiLevel || '',
           pm25: weatherData.pm25 != null ? String(weatherData.pm25) : '',
           pm10: weatherData.pm10 != null ? String(weatherData.pm10) : '',
-          weatherSuggestion: (weatherData.suggestion || '').substring(0, 300),
-          peakFlow: (document.getElementById('peak-flow-input').value || '').trim()
+          weatherSuggestion: (weatherData.suggestion || '').substring(0, 300)
         };
         var iframe = document.createElement('iframe');
         iframe.style.display = 'none';
@@ -1187,7 +1303,7 @@
         setTimeout(function() {
           document.body.removeChild(form);
           document.body.removeChild(iframe);
-          if (callback) callback(true);
+          if (callback) callback(true, 'submitted-only');
         }, 2500);
       }
 
@@ -1208,7 +1324,6 @@
         startPatientId = '';
         emailInput.value = '';
         consentCheckbox.checked = false;
-        document.getElementById('peak-flow-input').value = '';
         var saveStatusEl = document.getElementById('save-status');
         if (saveStatusEl) {
           saveStatusEl.textContent = '';
