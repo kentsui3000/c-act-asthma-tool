@@ -107,7 +107,7 @@ test('both deployed-path copies stay identical and script uses no new MailApp sc
 test('public health does not touch spreadsheet, Gmail, or patient data', () => {
   const h = harness({ sheetAuthFailure: true, gmailAuthFailure: true });
   const output = JSON.parse(h.ctx.doGet({ parameter: { mode: 'health' } }).text);
-  assert.equal(output.ok, true); assert.equal(output.apiVersion, 2); assert.equal(output.release, '2026-11-24-pf1');
+  assert.equal(output.ok, true); assert.equal(output.apiVersion, 2); assert.equal(output.release, h.ctx.ACT_PF_RELEASE);
   assert.equal(h.sheetReads.length + h.writes.length + h.appends.length + h.emails.length, 0);
   assert.equal(output.rows, undefined);
 });

@@ -1,74 +1,10 @@
 'use strict';
-// Cross-layer checks: actual Apps Script functions serve actual frontend code.
-// The existing test harnesses supply synthetic Google/DOM adapters only.
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const root = path.resolve(__dirname, '..');
-
-function loadAdapter(filename) {
-  const noTest = () => {};
-  noTest.test = noTest;
-  const ctx = {
-    __dirname: path.join(root, 'tests'),
-    require(name) { return name === 'node:test' ? noTest : require(name); },
-    console: { log() {}, error() {}, warn() {} },
-    AbortController, URLSearchParams, Promise, Date, setImmediate,
-  };
-  vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(path.join(root, 'tests', filename), 'utf8') +
-    '\nglobalThis.adapter = { harness, response: typeof response === "function" ? response : null };', ctx);
-  return ctx.adapter;
-}
-
-const backend = loadAdapter('backend-pf.cjs');
-const frontend = loadAdapter('frontend-nurse.test.cjs');
-
-test('real frontend and Apps Script agree on changed-key PF acknowledgment, with no questionnaire append', async () => {
-  const b = backend.harness({ property: 'test-pin' });
-  const f = frontend.harness((_url, options) => {
-    const parameter = Object.fromEntries(new URLSearchParams(options.body));
-    const output = b.ctx.doPost({ parameter });
-    return Promise.resolve(frontend.response(JSON.parse(output.text)));
-  });
-  f.app.nurseState.pin = 'test-pin';
-  f.app.nurseState.session = 1;
-  assert.equal(await f.app.loadNurseList(), true);
-  const rendered = f.nodes.get('nurse-list-container').children[0];
-  assert.equal(rendered.children[2].textContent, '0');
-  await rendered.click();
-  const oldKey = f.app.nurseState.editing.rowKey;
-  f.nodes.get('pf-modal-input').value = '320';
-  await f.nodes.get('pf-modal-save').click();
-  assert.match(f.nodes.get('pf-modal-status').textContent, /已確認儲存/);
-  assert.notEqual(f.app.nurseState.editing.rowKey, oldKey);
-  assert.equal(f.app.nurseState.editing.oldValue, 320);
-  assert.equal(b.writes.length, 1);
-  assert.equal(b.writes[0].col, 16);
-  assert.equal(b.appends.length, 0);
-  assert.equal(b.emails.length, 0);
-
-  // A second legitimate edit uses the new key and still updates one sheet row.
-  f.nodes.get('pf-modal-input').value = '340';
-  await f.nodes.get('pf-modal-save').click();
-  assert.equal(f.app.nurseState.editing.oldValue, 340);
-  assert.equal(b.writes.length, 2);
-  assert.equal(b.sheets.get('ACT Records').data.length, 2);
-  assert.equal(b.appends.length + b.emails.length, 0);
-});
-
-test('stale second editor cannot overwrite PF changed by another client', async () => {
-  const b = backend.harness({ property: 'test-pin' });
-  const initial = b.post('nurse_list', { pin: 'test-pin' }).rows[0];
-  const first = b.post('update_pf', { pin: 'test-pin', rowIndex: '2', rowKey: initial.rowKey, peakFlow: '320' });
-  assert.equal(first.ok, true);
-  assert.equal(first.previousRowKey, initial.rowKey);
-  assert.notEqual(first.rowKey, initial.rowKey);
-  const stale = b.post('update_pf', { pin: 'test-pin', rowIndex: '2', rowKey: initial.rowKey, peakFlow: '340' });
-  assert.equal(stale.ok, false);
-  assert.equal(stale.error.code, 'RECORD_CHANGED');
-  assert.equal(b.writes.length, 1);
-  assert.equal(b.sheets.get('ACT Records').data[1][15], 320);
-});
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const {harness:backend,privatePin,actHeader,actRow}=require('./backend-history-contract.cjs');
+const {harness:frontend,response,fillPf}=require('./frontend-history-harness.cjs');
+function linked(options={}){const b=backend({actRows:[actHeader,actRow('35292')],...options});const ui=frontend(params=>Promise.resolve(response(b.post(params.get('mode'),Object.fromEntries(params)))));ui.app.nurseState.pin=privatePin;ui.app.nurseState.session=1;ui.app.initializeNurseDates();return{b,ui};}
+test('actual frontend and backend keep desktop PF95 separate, save a historical mobile event, then reflect only an actual ack',async()=>{const{b,ui}=linked();const desktop=b.overlay({assessmentDate:'2026-11-24'});assert.equal(desktop.ok,true);assert.equal(await ui.app.loadNurseList(),true);const text=ui.nodes.get('nurse-list-container').text();assert.match(text,/TK桌面/);assert.match(text,/Peak Flow：95/);assert.match(text,/分數：0/);const initialAct=JSON.stringify(b.sheets.get('ACT Records').rows);fillPf(ui,{chart:'35292',date:'2026-11-22',value:'320'});assert.equal(await ui.app.savePfRecord(),true);assert.match(ui.nodes.get('pf-record-status').textContent,/待 Overlay 同步/);const eventId=ui.app.nurseState.attempt.eventId;const ack=b.post('pf_ack',{eventId,overlayId:'101',committedAt:'2026-11-24T02:19:00Z'});assert.equal(ack.ok,true);assert.equal(await ui.app.loadNurseList(),true);assert.match(ui.nodes.get('nurse-list-container').text(),/已同步至 Overlay/);assert.equal(JSON.stringify(b.sheets.get('ACT Records').rows),initialAct);assert.equal(b.writes.some(x=>x.sheet==='ACT Records'),false);assert.equal(b.emails.length,0);});
+test('actual duplicate confirmation preserves desktop measurement and appends only after explicit extra-measurement consent',async()=>{const{b,ui}=linked();b.overlay({assessmentDate:'2026-11-24'});fillPf(ui,{chart:'35292',date:'2026-11-24',value:'100'});assert.equal(await ui.app.savePfRecord(),false);const eventId=ui.app.nurseState.attempt.eventId;assert.equal(b.sheets.get('PF Records').rows.length,2);assert.equal(await ui.app.savePfRecord(),false);assert.equal(b.sheets.get('PF Records').rows.length,2);ui.nodes.get('pf-confirm-additional').checked=true;assert.equal(await ui.app.savePfRecord(),true);assert.equal(ui.app.nurseState.attempt.eventId,eventId);assert.equal(b.sheets.get('PF Records').rows.length,3);assert.equal(b.sheets.get('PF Records').rows[1][2],95);assert.equal(b.sheets.get('PF Records').rows[2][2],100);assert.equal(b.sheets.get('ACT Records').rows[1][15],'');assert.equal(b.emails.length,0);});
+test('actual new API rejects the public legacy password and fails visibly when private credentials are not configured',async()=>{const{b,ui}=linked({properties:{}});assert.equal(await ui.app.loadNurseList(),false);assert.match(ui.nodes.get('nurse-list-container').text(),/設定|管理/);assert.equal(b.writes.length,0);});

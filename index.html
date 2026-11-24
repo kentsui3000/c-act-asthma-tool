@@ -302,6 +302,16 @@
       white-space: nowrap;
     }
     .nurse-row .nr-pf.empty { color: var(--accent); font-weight: 600; background: rgba(255,182,64,0.15); }
+    .nurse-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .nurse-grid label, .nurse-field label { display:block; font-weight:500; margin-bottom:6px; }
+    .nurse-grid input, .nurse-field input { min-width:0; max-width:100%; }
+    .nurse-entry { border:1px solid rgba(71,96,122,.2); border-radius:12px; padding:14px; margin:10px 0; overflow-wrap:anywhere; }
+    .nurse-entry p { margin:7px 0; font-size:.9rem; }
+    .nurse-badge { display:inline-block; border-radius:6px; padding:3px 7px; margin-right:8px; background:#e8eef4; font-size:.8rem; }
+    .nurse-date-heading { margin-top:24px; font-size:1.05rem; }
+    .nurse-confirm label { display:flex; gap:9px; align-items:flex-start; font-size:.9rem; }
+    .nurse-confirm input[type=checkbox] { width:18px; height:18px; padding:0; margin:3px 0 0; flex:0 0 18px; }
+    @media(max-width:420px) { .nurse-grid { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -551,32 +561,52 @@
 
     <!-- 第四頁：管理模式 -->
     <div id="page-nurse" class="page-section no-print">
-      <div class="btn-row" style="margin-bottom: 16px;">
+      <div class="btn-row" style="margin-bottom:16px;">
         <button type="button" class="btn btn-secondary" id="btn-nurse-back">← 回到首頁</button>
-        <button type="button" class="btn btn-primary" id="btn-nurse-refresh" style="flex:0 0 auto; width: auto;">重新整理</button>
+        <button type="button" class="btn btn-primary" id="btn-nurse-refresh" style="width:auto;" disabled>重新整理</button>
       </div>
-      <div class="start-card">
-        <h2 style="font-size: 1.2rem; color: var(--dark); margin-bottom: 4px;">管理模式</h2>
-        <p id="nurse-list-date" style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;">今日完成氣喘測驗的病患列表，可補填 Peak Flow。</p>
-        <div id="nurse-list-container">
-          <p style="color: var(--text-muted);">載入中…</p>
+      <div id="nurse-login" class="start-card">
+        <h2 style="font-size:1.2rem;">管理模式登入</h2>
+        <p style="font-size:.9rem;">請使用管理員提供的新版管理密碼。</p>
+        <div class="nurse-field">
+          <label for="nurse-password">管理密碼</label>
+          <input id="nurse-password" type="password" autocomplete="current-password" placeholder="輸入或貼上管理密碼">
         </div>
+        <button id="btn-nurse-login" type="button" class="btn btn-primary">登入</button>
+        <p id="nurse-login-status" role="status" aria-live="polite"></p>
       </div>
-    </div>
-
-    <!-- Peak Flow 編輯 Modal -->
-    <div id="pf-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center;">
-      <div style="background:white; border-radius:var(--radius); padding:24px; width:90%; max-width:380px; box-shadow:0 16px 48px rgba(0,0,0,0.2);">
-        <h3 style="font-size:1.1rem; color:var(--dark); margin-bottom:4px;" id="pf-modal-title">編輯 Peak Flow</h3>
-        <p id="pf-modal-patient" style="font-size:0.9rem; color:var(--text-muted); margin-bottom:16px;"></p>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input type="number" id="pf-modal-input" placeholder="例：320" min="50" max="900" style="flex:1; padding:12px 14px; font-size:1rem; border:2px solid rgba(71,96,122,0.25); border-radius:10px; font-family:inherit;">
-          <span style="font-size:0.9rem; color:var(--text-muted);">L/min</span>
+      <div id="nurse-workspace" class="hidden">
+        <div class="start-card">
+          <h2 style="font-size:1.2rem;">查詢問卷與 Peak Flow</h2>
+          <div class="nurse-field field">
+            <label for="nurse-history-chart">病歷號（精確查詢）</label>
+            <input id="nurse-history-chart" inputmode="numeric" maxlength="7" placeholder="留空查看今天全部記錄">
+          </div>
+          <div class="nurse-grid">
+            <div><label for="nurse-start-date">起始日期</label><input type="date" id="nurse-start-date"></div>
+            <div><label for="nurse-end-date">結束日期</label><input type="date" id="nurse-end-date"></div>
+          </div>
+          <p style="font-size:.85rem;color:var(--text-muted);">可查詢過去日期，每次最多 31 天；查詢過去記錄請填病歷號。</p>
+          <button id="btn-nurse-search" type="button" class="btn btn-primary">查詢記錄</button>
+          <p id="nurse-list-date" role="status" aria-live="polite"></p>
+          <div id="nurse-list-container"></div>
+          <button id="btn-nurse-more" type="button" class="btn btn-secondary hidden">載入更多</button>
         </div>
-        <p id="pf-modal-status" role="status" aria-live="polite" style="font-size:0.9rem; margin-top:12px;"></p>
-        <div style="display:flex; gap:8px; margin-top:16px; justify-content:flex-end;">
-          <button type="button" class="btn btn-secondary" id="pf-modal-cancel" style="width:auto; padding:10px 20px;">取消</button>
-          <button type="button" class="btn btn-primary" id="pf-modal-save" style="width:auto; padding:10px 20px;">儲存</button>
+        <div class="start-card">
+          <h2 style="font-size:1.2rem;">新增獨立 Peak Flow 量測</h2>
+          <p style="font-size:.9rem;">此處新增一筆量測，不會覆寫其他來源的 PF，也不會自動填入 ACT 問卷。請先核對病歷號與量測日期。</p>
+          <div class="nurse-field field"><label for="pf-chart">病歷號</label><input id="pf-chart" inputmode="numeric" maxlength="7" placeholder="必填，最多 7 位數"></div>
+          <p id="pf-patient-status" style="font-size:.9rem;">請核對病歷號，尚無可確認姓名的紀錄。</p>
+          <div class="nurse-grid">
+            <div><label for="pf-date">實際量測日期</label><input type="date" id="pf-date"></div>
+            <div><label for="pf-value">Peak Flow（L/min）</label><input type="number" id="pf-value" min="50" max="900" step="1" placeholder="50–900"></div>
+          </div>
+          <div id="pf-additional-confirm" class="nurse-confirm hidden" style="margin-top:14px;">
+            <label><input type="checkbox" id="pf-confirm-additional"> 我已確認此病歷在同一天另有一筆不同量測；本次要保留為新增記錄。</label>
+          </div>
+          <p id="pf-record-status" role="status" aria-live="polite"></p>
+          <button id="btn-pf-record" type="button" class="btn btn-primary">儲存這筆量測</button>
+          <button id="btn-pf-new" type="button" class="btn btn-secondary">再新增一筆量測</button>
         </div>
       </div>
     </div>
@@ -588,7 +618,7 @@
       var GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyK3AanqxlBZcmmOwt3boAtxHY-anpRnBW3g5Dq3HSCSrSuI3LBCgffHk9e4Y4tvLmiKA/exec'; // 例：'https://script.google.com/macros/s/xxxxx/exec'
 
       // Staff credentials stay in memory and are verified by the backend.
-      var nurseState = { pin: '', session: 0, listRequest: 0, saveRequest: 0, editing: null, saving: false };
+      var nurseState = { pin: '', session: 0, listRequest: 0, saveRequest: 0, saving: false, attempt: null, history: null, lastError: '' };
 
       var pageStart = document.getElementById('page-start');
       var pageQuiz = document.getElementById('page-quiz');
@@ -711,49 +741,7 @@
         page.classList.add('active');
       }
 
-      // ── Nurse Mode ──
-      document.getElementById('btn-nurse-mode').addEventListener('click', function() {
-        var pin = prompt('請輸入護理師密碼：');
-        if (pin === null || !pin.trim()) return;
-        nurseState.pin = pin.trim();
-        nurseState.session++;
-        nurseState.editing = null;
-        showPage(pageNurse);
-        loadNurseList();
-      });
-      document.getElementById('btn-nurse-back').addEventListener('click', function() {
-        nurseState.pin = '';
-        nurseState.session++;
-        nurseState.listRequest++;
-        nurseState.saveRequest++;
-        nurseState.editing = null;
-        setPfBusy(false);
-        document.getElementById('pf-modal').style.display = 'none';
-        document.getElementById('pf-modal-input').value = '';
-        setPfStatus('', false);
-        document.getElementById('nurse-list-container').replaceChildren();
-        showPage(pageStart);
-      });
-      document.getElementById('btn-nurse-refresh').addEventListener('click', loadNurseList);
-      function setPfBusy(busy) {
-        nurseState.saving = busy;
-        document.getElementById('pf-modal-save').disabled = busy;
-        document.getElementById('pf-modal-cancel').disabled = busy;
-        document.getElementById('pf-modal-input').disabled = busy;
-      }
-      function setPfStatus(message, failed) {
-        var status = document.getElementById('pf-modal-status');
-        status.textContent = message;
-        status.style.color = failed ? 'var(--red)' : 'var(--text-muted)';
-      }
-      function closePfModal() {
-        if (nurseState.saving) return;
-        nurseState.editing = null;
-        nurseState.saveRequest++;
-        document.getElementById('pf-modal').style.display = 'none';
-        document.getElementById('pf-modal-input').value = '';
-        setPfStatus('', false);
-      }
+      // ── Nurse Mode: private history and independent PF records ──
       function nurseError(message, code) {
         var error = new Error(message);
         error.code = code;
@@ -798,6 +786,27 @@
           throw nurseError('無法連線至 Google 服務，請檢查網路；若持續失敗，請管理員確認 Apps Script 授權。', 'NETWORK_ERROR');
         }).finally(function() { clearTimeout(timeout); });
       }
+      function nurseToday() { return taipeiTimestamp().slice(0, 10); }
+      function normalizedChart(value) {
+        var text = String(value || '').trim();
+        return /^\d{1,7}$/.test(text) && Number(text) > 0 ? text.padStart(7, '0') : null;
+      }
+      function validHistoryDate(value) {
+        return /^\d{4}-\d{2}-\d{2}$/.test(value) && !isNaN(Date.parse(value + 'T00:00:00+08:00')) &&
+          new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value && value <= nurseToday();
+      }
+      function historyQuery() {
+        var rawChart = document.getElementById('nurse-history-chart').value.trim();
+        var chart = rawChart ? normalizedChart(rawChart) : '';
+        var startDate = document.getElementById('nurse-start-date').value;
+        var endDate = document.getElementById('nurse-end-date').value;
+        if (rawChart && !chart) throw nurseError('請輸入有效病歷號（1–7 位數字，不能全為 0）。', 'INVALID_CHART');
+        if (!validHistoryDate(startDate) || !validHistoryDate(endDate) || startDate > endDate) throw nurseError('請選擇有效的過去日期，起始日不能晚於結束日。', 'INVALID_DATE');
+        if ((Date.parse(endDate) - Date.parse(startDate)) / 86400000 > 30) throw nurseError('每次最多查詢 31 天，請縮小日期範圍。', 'DATE_RANGE');
+        if (!chart && (startDate !== nurseToday() || endDate !== nurseToday())) throw nurseError('查詢過去記錄請填寫病歷號。', 'CHART_REQUIRED');
+        if (chart) document.getElementById('nurse-history-chart').value = chart;
+        return { chartNumber: chart, startDate: startDate, endDate: endDate };
+      }
       function setNurseMessage(message, failed) {
         var container = document.getElementById('nurse-list-container');
         container.replaceChildren();
@@ -807,108 +816,216 @@
         if (failed) paragraph.setAttribute('role', 'alert');
         container.appendChild(paragraph);
       }
-      function renderNurseRows(rows) {
+      function historyText(parent, message, className) {
+        var paragraph = document.createElement('p');
+        paragraph.textContent = message;
+        if (className) paragraph.className = className;
+        parent.appendChild(paragraph);
+        return paragraph;
+      }
+      function displayEntryTime(value) {
+        if (!value) return '未提供';
+        var date = new Date(value);
+        return isNaN(date.getTime()) ? '時間格式待確認' : date.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+      }
+      function pfNeedsReview(record) { return ['rejected_patient', 'error', 'conflict'].indexOf(record.syncStatus) !== -1; }
+      function pfSyncLabel(record) {
+        if (record.syncStatus === 'rejected_patient') return 'Google 已儲存／Overlay 拒絕：病歷號尚未確認，請人工處理';
+        if (record.syncStatus === 'synced' && record.overlayId !== '' && record.overlayId != null) return '已同步至 Overlay';
+        if (record.syncStatus === 'error' || record.syncStatus === 'conflict') return 'Google 已儲存／Overlay 同步失敗，請人工確認';
+        return 'Google 已儲存／待 Overlay 同步';
+      }
+      function sourceLabel(source) {
+        if (source === 'overlay_manual') return 'TK桌面';
+        if (source === 'mobile_pf') return '手機補登';
+        return '來源未確認';
+      }
+      function renderNurseHistory(history) {
         var container = document.getElementById('nurse-list-container');
         container.replaceChildren();
-        rows.forEach(function(record) {
-          var row = document.createElement('div');
-          row.className = 'nurse-row';
-          row.setAttribute('role', 'button');
-          row.tabIndex = 0;
-          var color = record.levelKey === 'good' ? 'var(--green)' : record.levelKey === 'partial' ? 'var(--yellow)' : 'var(--red)';
-          var hasPf = record.peakFlow !== '' && record.peakFlow != null;
-          [
-            ['nr-name', record.name || '—'],
-            ['nr-chart', record.chart || '—'],
-            ['nr-score', record.score == null || record.score === '' ? '—' : record.score, color],
-            ['nr-level', record.level || '', color],
-            ['nr-pf' + (hasPf ? '' : ' empty'), hasPf ? record.peakFlow + ' L/min' : '＋ 填入 PF']
-          ].forEach(function(field) {
-            var span = document.createElement('span');
-            span.className = field[0];
-            span.textContent = String(field[1]);
-            if (field[2]) span.style.color = field[2];
-            row.appendChild(span);
+        var groups = {};
+        history.rows.forEach(function(record) { (groups[record.assessmentDate] || (groups[record.assessmentDate] = [])).push({ kind: 'ACT', record: record }); });
+        history.pfRecords.forEach(function(record) { (groups[record.assessmentDate] || (groups[record.assessmentDate] = [])).push({ kind: 'PF', record: record }); });
+        var dates = Object.keys(groups).sort().reverse();
+        if (!dates.length) historyText(container, '此範圍尚無問卷或 Peak Flow 記錄。');
+        dates.forEach(function(date) {
+          var heading = document.createElement('h3'); heading.className = 'nurse-date-heading'; heading.textContent = date; container.appendChild(heading);
+          groups[date].forEach(function(entry) {
+            var record = entry.record;
+            var card = document.createElement('article'); card.className = 'nurse-entry';
+            var badge = document.createElement('span'); badge.className = 'nurse-badge'; badge.textContent = entry.kind === 'ACT' ? 'ACT問卷' : sourceLabel(record.source); card.appendChild(badge);
+            var chart = record.chartNumber || record.chart || '';
+            historyText(card, '病歷號：' + (chart || '未提供') + (entry.kind === 'ACT' && record.name ? ' · ' + record.name : ''));
+            if (entry.kind === 'ACT') {
+              historyText(card, (record.testType || 'ACT') + ' 分數：' + (record.score == null || record.score === '' ? '未提供' : record.score) + (record.level ? ' · ' + record.level : ''));
+              if (record.peakFlow !== '' && record.peakFlow != null) historyText(card, '問卷附帶 PF：' + record.peakFlow + ' L/min');
+              historyText(card, '問卷日期：' + record.assessmentDate);
+              historyText(card, '填寫時間：' + displayEntryTime(record.recordedAt || record.timestamp));
+            } else {
+              historyText(card, 'Peak Flow：' + record.peakFlow + ' L/min');
+              historyText(card, '量測日期：' + record.assessmentDate + (record.measuredAt ? ' · ' + displayEntryTime(record.measuredAt) : '（時刻未提供）'));
+              historyText(card, '登錄時間：' + displayEntryTime(record.recordedAt));
+              var syncText = historyText(card, pfSyncLabel(record));
+              if (pfNeedsReview(record)) syncText.style.color = 'var(--red)';
+            }
+            container.appendChild(card);
           });
-          function openEditor() {
-            if (nurseState.saving || !nurseState.pin) return;
-            nurseState.editing = { rowIndex: record.rowIndex, rowKey: record.rowKey, oldValue: record.peakFlow };
-            nurseState.saveRequest++;
-            document.getElementById('pf-modal-patient').textContent = record.name || '—';
-            document.getElementById('pf-modal-input').value = hasPf ? String(record.peakFlow) : '';
-            setPfStatus('', false);
-            document.getElementById('pf-modal').style.display = 'flex';
-            document.getElementById('pf-modal-input').focus();
-          }
-          row.addEventListener('click', openEditor);
-          row.addEventListener('keydown', function(event) {
-            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openEditor(); }
-          });
-          container.appendChild(row);
         });
+        if (history.invalidTimestampCount > 0) historyText(container, '另有 ' + history.invalidTimestampCount + ' 筆記錄日期無法判讀，請管理員確認。');
       }
-      function loadNurseList() {
+      function validHistoryPayload(data, query) {
+        if (!Array.isArray(data.rows) || !Array.isArray(data.pfRecords) || data.startDate !== query.startDate || data.endDate !== query.endDate) return false;
+        return data.rows.concat(data.pfRecords).every(function(record) {
+          if (!record) return false;
+          var chart = record.chartNumber || record.chart || '';
+          return validHistoryDate(record.assessmentDate) && record.assessmentDate >= query.startDate && record.assessmentDate <= query.endDate && (!query.chartNumber || normalizedChart(chart) === query.chartNumber);
+        }) && data.pfRecords.every(function(record) { return typeof record.eventId === 'string' && record.eventId && normalizedChart(record.chartNumber) === record.chartNumber && validPeakFlow(String(record.peakFlow)); });
+      }
+      function loadNurseList(append) {
         if (!nurseState.pin) return Promise.resolve(false);
+        append = append === true;
+        var query;
+        try { query = append && nurseState.history ? nurseState.history.query : historyQuery(); }
+        catch (error) { nurseState.lastError = error.message; setNurseMessage(error.message, true); return Promise.resolve(false); }
         var session = nurseState.session;
         var request = ++nurseState.listRequest;
-        setNurseMessage('載入中…', false);
-        return nurseRequest('nurse_list').then(function(data) {
+        var fields = { chartNumber: query.chartNumber, startDate: query.startDate, endDate: query.endDate };
+        if (append && nurseState.history && nurseState.history.nextCursor) fields.cursor = nurseState.history.nextCursor;
+        if (!append) setNurseMessage('載入中…', false);
+        document.getElementById('btn-nurse-more').disabled = true;
+        document.getElementById('nurse-list-container').setAttribute('aria-busy', 'true');
+        return nurseRequest('nurse_history', fields).then(function(data) {
           if (session !== nurseState.session || request !== nurseState.listRequest) return null;
-          if (!Array.isArray(data.rows) || !/^\d{4}-\d{2}-\d{2}$/.test(data.date || '') || data.rows.some(function(row) {
-            return !row || !Number.isInteger(row.rowIndex) || row.rowIndex < 2 || typeof row.rowKey !== 'string' || !row.rowKey;
-          })) throw nurseError('記錄格式不符，請確認 Apps Script 已更新部署。', 'INVALID_RESPONSE');
-          document.getElementById('nurse-list-date').textContent = data.date + ' 完成氣喘測驗的病患列表，可補填 Peak Flow。';
-          if (data.rows.length) renderNurseRows(data.rows);
-          else setNurseMessage('今日尚無測驗記錄。', false);
-          if (Number.isInteger(data.invalidTimestampCount) && data.invalidTimestampCount > 0) {
-            if (!data.rows.length) setNurseMessage('今日尚無可確認日期的測驗記錄。', false);
-            var warning = document.createElement('p');
-            warning.textContent = '另有 ' + data.invalidTimestampCount + ' 筆記錄日期無法判讀，請管理員確認。';
-            warning.style.color = 'var(--red)';
-            document.getElementById('nurse-list-container').appendChild(warning);
-          }
+          if (!validHistoryPayload(data, query)) throw nurseError('記錄與查詢病歷號或日期不符，請重新查詢。', 'INVALID_RESPONSE');
+          var old = append && nurseState.history ? nurseState.history : { rows: [], pfRecords: [] };
+          function uniqueRows(items, key) { var seen = {}; return items.filter(function(item) { var id = item[key]; if (!id) return true; if (seen[id]) return false; seen[id] = true; return true; }); }
+          nurseState.history = { query: query, rows: uniqueRows(old.rows.concat(data.rows), 'rowKey'), pfRecords: uniqueRows(old.pfRecords.concat(data.pfRecords), 'eventId'), nextCursor: data.nextCursor || '', invalidTimestampCount: data.invalidTimestampCount || 0 };
+          document.getElementById('nurse-list-date').textContent = query.startDate + ' ～ ' + query.endDate + (query.chartNumber ? ' · 病歷號 ' + query.chartNumber : ' · 今天全部病歷');
+          renderNurseHistory(nurseState.history);
+          updatePfPatientNotice();
+          document.getElementById('btn-nurse-more').classList.toggle('hidden', !nurseState.history.nextCursor);
+          nurseState.lastError = '';
           return true;
         }).catch(function(error) {
           if (session !== nurseState.session || request !== nurseState.listRequest) return null;
+          nurseState.lastError = error.message;
           setNurseMessage(error.message, true);
           return false;
+        }).finally(function() {
+          if (session === nurseState.session && request === nurseState.listRequest) { document.getElementById('btn-nurse-more').disabled = false; document.getElementById('nurse-list-container').setAttribute('aria-busy', 'false'); }
         });
       }
-      function validPeakFlow(value) {
-        return /^\d+$/.test(value) && Number.isInteger(Number(value)) && Number(value) >= 50 && Number(value) <= 900;
+      function validPeakFlow(value) { return /^\d+$/.test(value) && Number.isInteger(Number(value)) && Number(value) >= 50 && Number(value) <= 900; }
+      function newPfEventId() {
+        if (typeof crypto === 'undefined' || !crypto.getRandomValues) throw nurseError('此瀏覽器無法建立量測識別碼，請更新瀏覽器後再試。', 'UNSUPPORTED_BROWSER');
+        var bytes = crypto.getRandomValues(new Uint8Array(16)); bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+        var text = Array.prototype.map.call(bytes, function(value) { return ('0' + value.toString(16)).slice(-2); }).join('');
+        return text.slice(0,8) + '-' + text.slice(8,12) + '-' + text.slice(12,16) + '-' + text.slice(16,20) + '-' + text.slice(20);
       }
-      document.getElementById('pf-modal-cancel').addEventListener('click', closePfModal);
-      document.getElementById('pf-modal-save').addEventListener('click', function() {
-        if (nurseState.saving || !nurseState.editing || !nurseState.pin) return;
-        var value = document.getElementById('pf-modal-input').value.trim();
-        if (!validPeakFlow(value)) {
-          setPfStatus('請輸入有效的 Peak Flow 整數（50–900 L/min）。', true);
-          return;
-        }
-        var editing = nurseState.editing;
+      function setPfRecordStatus(message, failed) { var status = document.getElementById('pf-record-status'); status.textContent = message; status.style.color = failed ? 'var(--red)' : 'var(--text-muted)'; }
+      function setPfRecordBusy(busy) {
+        nurseState.saving = busy;
+        ['btn-pf-record','btn-pf-new','pf-chart','pf-date','pf-value','pf-confirm-additional'].forEach(function(id) { document.getElementById(id).disabled = busy; });
+      }
+      function resetPfAttempt() {
+        if (nurseState.saving) return;
+        nurseState.attempt = null;
+        document.getElementById('pf-confirm-additional').checked = false;
+        document.getElementById('pf-additional-confirm').classList.add('hidden');
+        document.getElementById('btn-pf-record').disabled = false;
+        setPfRecordStatus('', false);
+      }
+      function updatePfPatientNotice() {
+        var chart = normalizedChart(document.getElementById('pf-chart').value);
+        var rows = nurseState.history ? nurseState.history.rows : [];
+        var known = rows.find(function(row) { return chart && normalizedChart(row.chartNumber || row.chart) === chart && row.name; });
+        document.getElementById('pf-patient-status').textContent = known ? '請核對病歷號與本人；問卷記錄姓名：' + known.name : '請核對病歷號，尚無可確認姓名的紀錄。';
+      }
+      function pfPayload() {
+        var chart = normalizedChart(document.getElementById('pf-chart').value);
+        var date = document.getElementById('pf-date').value;
+        var value = document.getElementById('pf-value').value.trim();
+        if (!chart) throw nurseError('請核對並輸入有效病歷號（1–7 位數字，不能全為 0）。', 'INVALID_CHART');
+        if (!validHistoryDate(date)) throw nurseError('請選擇實際量測日期，不能是未來日期。', 'INVALID_DATE');
+        if (!validPeakFlow(value)) throw nurseError('請輸入 Peak Flow 整數（50–900 L/min）。', 'INVALID_PF');
+        document.getElementById('pf-chart').value = chart;
+        return { chartNumber: chart, assessmentDate: date, peakFlow: Number(value) };
+      }
+      function savePfRecord() {
+        if (!nurseState.pin || nurseState.saving) return Promise.resolve(false);
+        var payload;
+        try { payload = pfPayload(); } catch (error) { setPfRecordStatus(error.message, true); return Promise.resolve(false); }
+        var key = JSON.stringify(payload);
+        try { if (!nurseState.attempt || nurseState.attempt.key !== key) nurseState.attempt = { eventId: newPfEventId(), key: key, confirmed: false, saved: false }; }
+        catch (error) { setPfRecordStatus(error.message, true); return Promise.resolve(false); }
+        var attempt = nurseState.attempt;
+        if (attempt.confirmed && !document.getElementById('pf-confirm-additional').checked) { setPfRecordStatus('請先勾選確認這是同一天另一筆不同量測，再次儲存。', true); return Promise.resolve(false); }
+        if (attempt.saved) return Promise.resolve(true);
         var session = nurseState.session;
         var request = ++nurseState.saveRequest;
-        setPfBusy(true);
-        setPfStatus('正在儲存，請稍候…', false);
-        return nurseRequest('update_pf', { rowIndex: editing.rowIndex, rowKey: editing.rowKey, peakFlow: value }).then(function(data) {
-          if (session !== nurseState.session || request !== nurseState.saveRequest) return;
-          if (data.previousRowKey !== editing.rowKey || typeof data.rowKey !== 'string' || !data.rowKey || data.rowIndex !== editing.rowIndex || data.peakFlow !== Number(value)) {
-            throw nurseError('尚未收到一致的儲存確認，請重新整理確認記錄後再試。', 'ACK_MISMATCH');
-          }
-          editing.rowKey = data.rowKey;
-          editing.oldValue = data.peakFlow;
-          setPfStatus('Peak Flow 已確認儲存：' + data.peakFlow + ' L/min。', false);
-          return loadNurseList().then(function(loaded) {
-            if (session === nurseState.session && request === nurseState.saveRequest && loaded === false) {
-              setPfStatus('Peak Flow 已確認儲存，但列表更新失敗，請重新整理。', false);
-            }
-          });
+        var historyRequest = nurseState.listRequest;
+        var fields = { eventId: attempt.eventId, chartNumber: payload.chartNumber, assessmentDate: payload.assessmentDate, peakFlow: String(payload.peakFlow) };
+        if (attempt.confirmed && document.getElementById('pf-confirm-additional').checked) fields.confirmAdditional = 'yes';
+        setPfRecordBusy(true); setPfRecordStatus('正在儲存這筆量測…', false);
+        return nurseRequest('pf_record', fields).then(function(data) {
+          if (session !== nurseState.session || request !== nurseState.saveRequest) return null;
+          var record = data.record;
+          if (!record || record.eventId !== attempt.eventId || record.chartNumber !== payload.chartNumber || record.assessmentDate !== payload.assessmentDate || record.peakFlow !== payload.peakFlow || !record.versionKey) throw nurseError('尚未收到一致的儲存確認，請重新整理查詢後再試；重試會沿用同一筆識別碼。', 'ACK_MISMATCH');
+          attempt.saved = true;
+          setPfRecordStatus(pfSyncLabel(record) + '。病歷號 ' + record.chartNumber + ' · 量測日期 ' + record.assessmentDate + ' · ' + record.peakFlow + ' L/min。', pfNeedsReview(record));
+          document.getElementById('pf-additional-confirm').classList.add('hidden');
+          if (historyRequest !== nurseState.listRequest) return true;
+          document.getElementById('nurse-history-chart').value = payload.chartNumber;
+          document.getElementById('nurse-start-date').value = payload.assessmentDate;
+          document.getElementById('nurse-end-date').value = payload.assessmentDate;
+          return loadNurseList().then(function() { return true; });
         }).catch(function(error) {
-          if (session === nurseState.session && request === nurseState.saveRequest) setPfStatus(error.message, true);
+          if (session !== nurseState.session || request !== nurseState.saveRequest) return null;
+          if (error.code === 'ADDITIONAL_CONFIRMATION_REQUIRED') {
+            attempt.confirmed = true;
+            document.getElementById('pf-additional-confirm').classList.remove('hidden');
+            document.getElementById('pf-confirm-additional').checked = false;
+            setPfRecordStatus('同一病歷在這一天已有量測。請先核對記錄；確定為另一筆不同量測時，勾選確認後再次儲存。', true);
+          } else setPfRecordStatus(error.message, true);
+          return false;
         }).finally(function() {
-          if (session === nurseState.session && request === nurseState.saveRequest) setPfBusy(false);
+          if (session === nurseState.session && request === nurseState.saveRequest) { setPfRecordBusy(false); document.getElementById('btn-pf-record').disabled = attempt.saved; }
+        });
+      }
+      function initializeNurseDates() {
+        var today = nurseToday();
+        ['nurse-start-date','nurse-end-date','pf-date'].forEach(function(id) { document.getElementById(id).value = today; document.getElementById(id).max = today; });
+      }
+      document.getElementById('btn-nurse-mode').addEventListener('click', function() {
+        showPage(pageNurse); document.getElementById('nurse-login').classList.remove('hidden'); document.getElementById('nurse-workspace').classList.add('hidden'); document.getElementById('nurse-password').focus(); initializeNurseDates();
+      });
+      document.getElementById('btn-nurse-login').addEventListener('click', function() {
+        var pin = document.getElementById('nurse-password').value.trim();
+        if (!pin) { document.getElementById('nurse-login-status').textContent = '請輸入管理密碼。'; return; }
+        nurseState.pin = pin; nurseState.session++; var session = nurseState.session;
+        document.getElementById('btn-nurse-login').disabled = true; document.getElementById('nurse-login-status').textContent = '登入中…';
+        return loadNurseList().then(function(ok) {
+          if (session !== nurseState.session) return;
+          document.getElementById('nurse-password').value = '';
+          document.getElementById('btn-nurse-login').disabled = false;
+          if (ok) { document.getElementById('nurse-login').classList.add('hidden'); document.getElementById('nurse-workspace').classList.remove('hidden'); document.getElementById('nurse-history-chart').focus(); document.getElementById('btn-nurse-refresh').disabled = false; document.getElementById('nurse-login-status').textContent = ''; }
+          else { nurseState.pin = ''; document.getElementById('nurse-login-status').textContent = nurseState.lastError || '無法登入，請重新確認密碼。'; }
         });
       });
+      document.getElementById('nurse-password').addEventListener('keydown', function(event) { if (event.key === 'Enter' && !document.getElementById('btn-nurse-login').disabled) document.getElementById('btn-nurse-login').click(); });
+      document.getElementById('btn-nurse-back').addEventListener('click', function() {
+        nurseState.pin = ''; nurseState.session++; nurseState.listRequest++; nurseState.saveRequest++; nurseState.history = null; nurseState.attempt = null;
+        setPfRecordBusy(false); document.getElementById('nurse-password').value = ''; document.getElementById('nurse-login-status').textContent = ''; document.getElementById('btn-nurse-login').disabled = false; document.getElementById('btn-nurse-refresh').disabled = true;
+        ['nurse-history-chart','pf-chart','pf-value'].forEach(function(id) { document.getElementById(id).value = ''; });
+        document.getElementById('pf-confirm-additional').checked = false; document.getElementById('pf-additional-confirm').classList.add('hidden');
+        document.getElementById('nurse-list-container').replaceChildren(); document.getElementById('nurse-list-date').textContent = ''; updatePfPatientNotice(); setPfRecordStatus('', false); showPage(pageStart); document.getElementById('btn-nurse-mode').focus();
+      });
+      document.getElementById('btn-nurse-refresh').addEventListener('click', function() { return loadNurseList(); });
+      document.getElementById('btn-nurse-search').addEventListener('click', function() { return loadNurseList(); });
+      document.getElementById('btn-nurse-more').addEventListener('click', function() { return loadNurseList(true); });
+      document.getElementById('btn-pf-record').addEventListener('click', savePfRecord);
+      ['pf-chart','pf-date','pf-value'].forEach(function(id) { document.getElementById(id).addEventListener('input', function() { resetPfAttempt(); updatePfPatientNotice(); }); });
+      document.getElementById('btn-pf-new').addEventListener('click', function() { resetPfAttempt(); document.getElementById('pf-value').value = ''; document.getElementById('pf-value').focus(); });
 
       btnStartQuiz.addEventListener('click', function() {
         var name = (startNameInput.value || '').trim();

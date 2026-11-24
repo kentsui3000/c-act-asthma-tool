@@ -19,7 +19,7 @@
  */
 
 var ACT_PF_API_VERSION = 2;
-var ACT_PF_RELEASE = '2026-11-24-pf1';
+var ACT_PF_RELEASE = '2026-11-24-pf-history1';
 // Urgent compatibility fallback. This legacy PIN has appeared in public source;
 // it is not strong authentication. Set ACT_NURSE_PIN in Script Properties to
 // rotate it without publishing a new client-side credential.
@@ -248,6 +248,11 @@ function handleUpdatePF(params, qaSheet) {
 function doPost(e) {
   var params = (e && e.parameter) || {};
   try {
+    if (params.mode === 'nurse_history') return pfJson_(handleNurseHistory_(params));
+    if (params.mode === 'pf_record') return pfJson_(handlePFRecord_(params));
+    if (params.mode === 'pf_sync') return pfJson_(handlePFSync_(params));
+    if (params.mode === 'pf_events') return pfJson_(handlePFEvents_(params));
+    if (params.mode === 'pf_ack') return pfJson_(handlePFAck_(params));
     if (params.mode === 'nurse_list') return pfJson_(handleNurseList(params));
     if (params.mode === 'update_pf') return pfJson_(handleUpdatePF(params));
     return pfJson_(pfFailure_('INVALID_MODE', '不支援的操作。', false));
@@ -365,6 +370,398 @@ function runIsolatedPFCloudSelfTest() {
   return report;
 }
 
+
+// Independent measurements. ACT Records A:P is never extended or projected from this registry.
+var PF_HISTORY_HEADERS = ['event_id', 'chart_number', 'peak_flow', 'assessment_date',
+  'measured_at', 'recorded_at', 'received_at', 'source', 'source_event_id', 'overlay_id',
+  'sync_status', 'committed_at', 'schema_version', 'linked_act_identity', 'payload_hash',
+  'updated_at', 'error_code', 'error_message'];
+
+function historyHash_(text) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8)
+    .map(function(value) { return ('0' + (value & 255).toString(16)).slice(-2); }).join('');
+}
+
+function requireHistorySecret_(params, sync) {
+  var key = sync ? 'ACT_PF_SYNC_KEY' : 'ACT_NURSE_PIN';
+  var configured = PropertiesService.getScriptProperties().getProperty(key);
+  if (!configured || configured === ACT_LEGACY_NURSE_PIN || configured.length < (sync ? 32 : 8)) {
+    throw pfError_('AUTH_NOT_CONFIGURED', '歷史 PF 存取尚未完成私人憑證設定，請聯絡管理者。', false);
+  }
+  var supplied = String(params[sync ? 'syncKey' : 'pin'] || '');
+  var difference = supplied.length ^ configured.length;
+  for (var i = 0; i < configured.length; i++) difference |= configured.charCodeAt(i) ^ (supplied.charCodeAt(i) || 0);
+  if (difference !== 0) throw pfError_('AUTH_FAILED', '存取憑證錯誤，請重新輸入。', false);
+}
+
+function historyToday_() { return Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd'); }
+
+function historyChart_(value, optional) {
+  var text = String(value == null ? '' : value).trim();
+  if (!text && optional) return '';
+  if (!/^\d{1,7}$/.test(text) || /^0+$/.test(text)) {
+    throw pfError_('INVALID_CHART', '請輸入 1–7 位數字病歷號。', false);
+  }
+  return ('0000000' + text).slice(-7);
+}
+
+function historyDate_(value) {
+  var text = String(value == null ? '' : value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || text < '1900-01-01') {
+    throw pfError_('INVALID_DATE', '請輸入有效的西元日期。', false);
+  }
+  var parsed = new Date(text + 'T00:00:00+08:00');
+  if (isNaN(parsed.getTime()) || Utilities.formatDate(parsed, 'Asia/Taipei', 'yyyy-MM-dd') !== text) {
+    throw pfError_('INVALID_DATE', '請輸入有效的西元日期。', false);
+  }
+  if (text > historyToday_()) throw pfError_('FUTURE_DATE', '不能登記或查詢未來日期。', false);
+  return text;
+}
+
+function historyISO_(value, required) {
+  var text = String(value == null ? '' : value).trim();
+  if (!text && !required) return '';
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i.test(text)) {
+    throw pfError_('INVALID_TIMESTAMP', '時間必須包含明確時區。', false);
+  }
+  var parsed = new Date(text);
+  var calendar = new Date(text.slice(0, 10) + 'T00:00:00Z');
+  if (isNaN(parsed.getTime()) || isNaN(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== text.slice(0, 10) ||
+      Utilities.formatDate(parsed, 'Asia/Taipei', 'yyyy-MM-dd') > historyToday_()) {
+    throw pfError_('INVALID_TIMESTAMP', '時間無效或位於未來日期。', false);
+  }
+  return parsed.toISOString();
+}
+
+function historyInteger_(value, fallback, min, max) {
+  if (value === undefined || value === null || value === '') return fallback;
+  var text = String(value);
+  if (!/^\d+$/.test(text) || !Number.isSafeInteger(Number(text)) || Number(text) < min || Number(text) > max) {
+    throw pfError_('INVALID_PAGINATION', '查詢分頁參數無效。', false);
+  }
+  return Number(text);
+}
+
+function historyRegistry_(create, override) {
+  var ss = override ? null : SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = override || ss.getSheetByName('PF Records');
+  if (!sheet && create) sheet = ss.insertSheet('PF Records');
+  if (!sheet) throw pfError_('PF_REGISTRY_NOT_INITIALIZED', 'PF 紀錄尚未初始化，請聯絡管理者。', false);
+  if (sheet.getMaxColumns() < PF_HISTORY_HEADERS.length && create) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), PF_HISTORY_HEADERS.length - sheet.getMaxColumns());
+  }
+  if (sheet.getLastRow() === 0 && create) sheet.getRange(1, 1, 1, PF_HISTORY_HEADERS.length).setValues([PF_HISTORY_HEADERS]);
+  if (sheet.getLastColumn() < PF_HISTORY_HEADERS.length) {
+    throw pfError_('PF_SCHEMA_MISMATCH', '獨立 PF 欄位不完整，停止存取以保護資料。', false);
+  }
+  var headers = sheet.getRange(1, 1, 1, PF_HISTORY_HEADERS.length).getValues()[0];
+  for (var i = 0; i < PF_HISTORY_HEADERS.length; i++) {
+    if (headers[i] !== PF_HISTORY_HEADERS[i]) throw pfError_('PF_SCHEMA_MISMATCH', '獨立 PF 欄位順序不符，停止存取以保護資料。', false);
+  }
+  return sheet;
+}
+
+function historyCellText_(value) { return value instanceof Date ? value.toISOString() : String(value == null ? '' : value); }
+function historyCellDate_(value) { return value instanceof Date ? Utilities.formatDate(value, 'Asia/Taipei', 'yyyy-MM-dd') : String(value || ''); }
+
+function historyVersion_(rowIndex, row) {
+  return historyHash_(String(rowIndex) + '\n' + JSON.stringify(row.slice(0, PF_HISTORY_HEADERS.length).map(historyCellText_)));
+}
+
+function historyRecord_(rowIndex, row) {
+  var canonicalSource = String(row[7]);
+  var canonical = { eventId: String(row[0]), chartNumber: historyChart_(row[1], false), peakFlow: Number(row[2]),
+    assessmentDate: historyCellDate_(row[3]), measuredAt: historyCellText_(row[4]),
+    recordedAt: canonicalSource === 'overlay_manual' ? historyCellText_(row[5]) : '',
+    source: canonicalSource, sourceEventId: String(row[8]),
+    overlayId: canonicalSource === 'overlay_manual' ? String(row[9] || '') : '', linkedActIdentity: String(row[13] || '') };
+  if (['mobile_pf', 'overlay_manual'].indexOf(canonicalSource) < 0 ||
+      historyHash_(JSON.stringify(canonical)) !== row[14]) {
+    throw pfError_('PF_RECORD_INTEGRITY', '獨立 PF 內容與原事件不一致，請聯絡管理者核對。', false);
+  }
+  return { eventId: String(row[0]), chartNumber: historyChart_(row[1], false), peakFlow: Number(row[2]),
+    assessmentDate: historyCellDate_(row[3]), measuredAt: historyCellText_(row[4]),
+    recordedAt: historyCellText_(row[5]), receivedAt: historyCellText_(row[6]), source: String(row[7]),
+    sourceEventId: String(row[8]), overlayId: String(row[9] || ''), syncStatus: String(row[10]),
+    committedAt: historyCellText_(row[11]), schemaVersion: Number(row[12]), linkedActIdentity: String(row[13] || ''),
+    rowIndex: rowIndex, versionKey: historyVersion_(rowIndex, row),
+    errorCode: String(row[16] || ''), errorMessage: String(row[17] || '') };
+}
+
+function historyActChart_(row) {
+  var chart = '', fromId = /^CHART-(\d{1,7})$/.exec(String(row[1] || ''));
+  try { chart = historyChart_(row[2], true); } catch (err) { return ''; }
+  var idChart = fromId ? historyChart_(fromId[1], false) : '';
+  return chart && idChart && chart !== idChart ? '' : chart || idChart;
+}
+
+function historySnapshotVersion_(act, events, actRows, pfRows) {
+  return historyHash_(JSON.stringify([
+    act.slice(0, actRows).map(function(row) { return row.slice(0, 16).map(historyCellText_); }),
+    events.slice(0, pfRows).map(function(row) {
+      // Delivery acknowledgments may change while paging; measurement facts may not.
+      return row.slice(0, 9).concat(row.slice(12, 15)).map(historyCellText_);
+    })
+  ]));
+}
+
+function historyCursor_(text, query, act, events) {
+  if (!text) return { offset: 0, actRows: act.length, pfRows: events.length, query: query,
+    version: historySnapshotVersion_(act, events, act.length, events.length) };
+  var value;
+  try {
+    if (String(text).slice(0, 3) !== 'v1.') throw new Error('Invalid cursor');
+    value = JSON.parse(decodeURIComponent(String(text).slice(3)));
+  } catch (err) { throw pfError_('INVALID_PAGINATION', '分頁識別無效，請重新查詢。', false); }
+  if (!value || value.query !== query || !Number.isSafeInteger(value.offset) || value.offset < 0 || value.offset > 1000000 ||
+      !Number.isSafeInteger(value.actRows) || value.actRows < 1 || !Number.isSafeInteger(value.pfRows) || value.pfRows < 1) {
+    throw pfError_('INVALID_PAGINATION', '分頁識別與目前查詢不符，請重新查詢。', false);
+  }
+  if (value.actRows > act.length || value.pfRows > events.length ||
+      value.version !== historySnapshotVersion_(act, events, value.actRows, value.pfRows)) {
+    throw pfError_('HISTORY_CHANGED_RELOAD', '原查詢資料已變動，請重新查詢以避免遺漏紀錄。', false);
+  }
+  return value;
+}
+
+function handleNurseHistory_(params) {
+  requireHistorySecret_(params, false);
+  var chart = historyChart_(params.chartNumber, true);
+  var today = historyToday_();
+  var weekAgo = new Date(today + 'T00:00:00+08:00');
+  weekAgo.setUTCDate(weekAgo.getUTCDate() - 6);
+  var start = historyDate_(params.startDate || (chart ? Utilities.formatDate(weekAgo, 'Asia/Taipei', 'yyyy-MM-dd') : today));
+  var end = historyDate_(params.endDate || today);
+  var days = (new Date(end + 'T00:00:00Z') - new Date(start + 'T00:00:00Z')) / 86400000 + 1;
+  if (days < 1 || days > 31) throw pfError_('DATE_RANGE_TOO_LARGE', '每次請查詢 1–31 天。', false);
+  if (!chart && (start !== today || end !== today)) {
+    throw pfError_('CHART_REQUIRED_FOR_HISTORY', '查詢過去紀錄時請先輸入病歷號。', false);
+  }
+  var limit = historyInteger_(params.limit, 100, 1, 200);
+  var act = nurseSheet_().getDataRange().getValues();
+  var events = historyRegistry_(false).getDataRange().getValues();
+  var snapshot = historyCursor_(params.cursor, historyHash_(chart + '|' + start + '|' + end), act, events);
+  var cursor = snapshot.offset;
+  var items = [], invalidTimestampCount = 0;
+  for (var i = 1; i < snapshot.actRows; i++) {
+    var actChart = historyActChart_(act[i]);
+    if (chart && actChart !== chart) continue;
+    if (!act[i].some(function(value) { return value !== '' && value != null; })) continue;
+    var date = taipeiRecordDate_(act[i][0]);
+    if (!date) { invalidTimestampCount++; continue; }
+    if (date < start || date > end) continue;
+    var timestamp = historyCellText_(act[i][0]);
+    items.push({ kind: 'ACT', rowIndex: i + 1, rowKey: nurseRowKey_(i + 1, act[i]),
+      stableKey: historyHash_(JSON.stringify(act[i].slice(0, 15).map(historyCellText_))),
+      name: act[i][3] || '', chart: act[i][2] || '', chartNumber: actChart,
+      testType: act[i][6] || '', score: act[i][7] == null ? '' : act[i][7],
+      level: act[i][8] || '', levelKey: act[i][9] || '', peakFlow: act[i][15] == null ? '' : act[i][15],
+      assessmentDate: date, recordedAt: timestamp, timestamp: timestamp });
+  }
+  for (var j = 1; j < snapshot.pfRows; j++) {
+    if (!events[j][0]) continue;
+    var event = historyRecord_(j + 1, events[j]);
+    if (chart && event.chartNumber !== chart) continue;
+    if (event.assessmentDate < start || event.assessmentDate > end) continue;
+    event.kind = 'PF'; items.push(event);
+  }
+  items.sort(function(a, b) {
+    return b.assessmentDate.localeCompare(a.assessmentDate) || b.recordedAt.localeCompare(a.recordedAt) ||
+      String(a.kind + ':' + (a.eventId || a.rowIndex)).localeCompare(String(b.kind + ':' + (b.eventId || b.rowIndex)));
+  });
+  var page = items.slice(cursor, cursor + limit);
+  var more = cursor + limit < items.length;
+  snapshot.offset = cursor + limit;
+  return { ok: true, apiVersion: ACT_PF_API_VERSION, startDate: start, endDate: end, chartNumber: chart,
+    rows: page.filter(function(item) { return item.kind === 'ACT'; }),
+    pfRecords: page.filter(function(item) { return item.kind === 'PF'; }),
+    nextCursor: more ? 'v1.' + encodeURIComponent(JSON.stringify(snapshot)) : null, hasMore: more, invalidTimestampCount: invalidTimestampCount };
+}
+
+function historyValidateEvent_(params, source) {
+  var id = String(params.eventId || '');
+  if (!/^[A-Za-z0-9][A-Za-z0-9:_.-]{7,179}$/.test(id)) throw pfError_('INVALID_EVENT_ID', 'PF 事件識別無效。', false);
+  var overlay = source === 'overlay_manual';
+  var overlayMatch = /^overlay:clinical_assessments:([1-9]\d*)$/.exec(id);
+  if (overlay && (!overlayMatch || !Number.isSafeInteger(Number(overlayMatch[1])))) {
+    throw pfError_('INVALID_SOURCE_EVENT', 'Overlay 來源識別無效。', false);
+  }
+  if (!overlay && /^overlay:/i.test(id)) throw pfError_('INVALID_SOURCE_EVENT', '手機不能冒用 Overlay 來源。', false);
+  var sourceId = overlay ? String(params.sourceEventId || '') : id;
+  if (overlay && sourceId !== overlayMatch[1] && sourceId !== 'clinical_assessments:' + overlayMatch[1]) {
+    throw pfError_('INVALID_SOURCE_EVENT', 'Overlay 來源識別不一致。', false);
+  }
+  if (overlay) sourceId = overlayMatch[1];
+  // 95.0 is the same integer measurement as 95; fractional PF is never rounded.
+  var pfText = String(params.peakFlow == null ? '' : params.peakFlow).trim();
+  if (!/^\d+(?:\.0+)?$/.test(pfText) || Number(pfText) < 50 || Number(pfText) > 900 || !Number.isInteger(Number(pfText))) {
+    throw pfError_('INVALID_PF', '請輸入 50–900 的整數 Peak Flow 數值。', false);
+  }
+  var date = historyDate_(params.assessmentDate);
+  var measured = historyISO_(params.measuredAt, false);
+  if (measured && taipeiRecordDate_(measured) !== date) throw pfError_('MEASUREMENT_DATE_MISMATCH', '測量時間與選擇日期不一致。', false);
+  var linked = String(params.linkedActIdentity || '');
+  if (linked && !/^[a-f0-9]{64}$/.test(linked)) throw pfError_('INVALID_ACT_LINK', '測驗關聯識別無效。', false);
+  return { eventId: id, chartNumber: historyChart_(params.chartNumber, false), peakFlow: Number(pfText),
+    assessmentDate: date, measuredAt: measured, recordedAt: overlay ? historyISO_(params.recordedAt, true) : '',
+    source: source, sourceEventId: sourceId, overlayId: overlay ? overlayMatch[1] : '', linkedActIdentity: linked };
+}
+
+function historyHasACTPF_(event) {
+  var rows = nurseSheet_().getDataRange().getValues();
+  return rows.slice(1).some(function(row) {
+    return historyActChart_(row) === event.chartNumber && taipeiRecordDate_(row[0]) === event.assessmentDate &&
+      row[15] !== '' && row[15] != null;
+  });
+}
+
+function historyWriteEvent_(params, source, qaSheet) {
+  var event = historyValidateEvent_(params, source);
+  var payloadHash = historyHash_(JSON.stringify(event));
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw pfError_('BUSY', '目前有人正在儲存，請稍後再試。', true);
+  try {
+    var sheet = historyRegistry_(false, qaSheet);
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) !== event.eventId) continue;
+      if (String(data[i][14]) !== payloadHash) throw pfError_('IDEMPOTENCY_CONFLICT', '同一事件識別的內容不同，未新增或覆寫資料。', false);
+      return { ok: true, apiVersion: ACT_PF_API_VERSION, duplicate: true, record: historyRecord_(i + 1, data[i]) };
+    }
+    if (source === 'mobile_pf' && params.confirmAdditional !== 'yes') {
+      var exists = data.slice(1).some(function(row) {
+        return historyChart_(row[1], true) === event.chartNumber && historyCellDate_(row[3]) === event.assessmentDate;
+      });
+      if (exists || (!qaSheet && historyHasACTPF_(event))) {
+        throw pfError_('ADDITIONAL_CONFIRMATION_REQUIRED', '此病歷當天已有 PF，請確認這是另一次測量後再新增。', false);
+      }
+    }
+    var now = new Date().toISOString();
+    var row = [event.eventId, event.chartNumber, event.peakFlow, event.assessmentDate, event.measuredAt,
+      event.recordedAt || now, now, event.source, event.sourceEventId, event.overlayId,
+      source === 'overlay_manual' ? 'synced' : 'pending', source === 'overlay_manual' ? event.recordedAt : '',
+      1, event.linkedActIdentity, payloadHash, now, '', ''];
+    var rowIndex = sheet.getLastRow() + 1;
+    if (rowIndex > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), rowIndex - sheet.getMaxRows());
+    var range = sheet.getRange(rowIndex, 1, 1, PF_HISTORY_HEADERS.length);
+    range.setNumberFormat('@'); range.setValues([row]);
+    SpreadsheetApp.flush();
+    var confirmed = sheet.getRange(rowIndex, 1, 1, PF_HISTORY_HEADERS.length).getValues()[0];
+    if (historyVersion_(rowIndex, confirmed) !== historyVersion_(rowIndex, row)) {
+      throw pfError_('WRITE_NOT_CONFIRMED', '未能確認 PF 已儲存，請保留事件識別後重新查詢。', true);
+    }
+    return { ok: true, apiVersion: ACT_PF_API_VERSION, duplicate: false, record: historyRecord_(rowIndex, confirmed) };
+  } finally { lock.releaseLock(); }
+}
+
+function handlePFRecord_(params) { requireHistorySecret_(params, false); return historyWriteEvent_(params, 'mobile_pf'); }
+function handlePFSync_(params) { requireHistorySecret_(params, true); return historyWriteEvent_(params, 'overlay_manual'); }
+
+function handlePFEvents_(params) {
+  requireHistorySecret_(params, true);
+  var after = historyInteger_(params.afterRow, 1, 1, 1000000000);
+  var limit = historyInteger_(params.limit, 50, 1, 200);
+  var data = historyRegistry_(false).getDataRange().getValues();
+  var pending = [];
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][7] === 'mobile_pf' && data[i][10] === 'pending') pending.push(historyRecord_(i + 1, data[i]));
+  }
+  // afterRow is a scan hint, never an acknowledgment: earlier unacked work cannot be lost.
+  var page = pending.slice(0, limit);
+  return { ok: true, apiVersion: ACT_PF_API_VERSION, events: page, afterRow: after,
+    nextAfterRow: page.length ? page[page.length - 1].rowIndex : after,
+    hasMore: pending.length > limit, lastScannedRow: data.length };
+}
+
+function historyAck_(params, qaSheet) {
+  var id = String(params.eventId || '');
+  var status = params.status || 'committed_overlay';
+  if (!/^[A-Za-z0-9][A-Za-z0-9:_.-]{7,179}$/.test(id)) throw pfError_('INVALID_EVENT_ID', 'PF 事件識別無效。', false);
+  if (status !== 'committed_overlay' && status !== 'rejected_patient') throw pfError_('INVALID_ACK', '同步確認狀態無效。', false);
+  var overlayId = String(params.overlayId || '');
+  var committedAt = '';
+  var errorCode = '';
+  if (status === 'committed_overlay') {
+    if (!/^[1-9]\d*$/.test(overlayId) || !Number.isSafeInteger(Number(overlayId))) throw pfError_('INVALID_ACK', '缺少有效 Overlay 提交識別。', false);
+    committedAt = historyISO_(params.committedAt, true);
+  } else {
+    if (overlayId || params.committedAt) throw pfError_('INVALID_ACK', '未確認病患的事件不能標示 Overlay 提交。', false);
+    errorCode = String(params.errorCode || 'PATIENT_NOT_FOUND');
+    if (['PATIENT_NOT_FOUND', 'PATIENT_AMBIGUOUS'].indexOf(errorCode) < 0) throw pfError_('INVALID_ACK', '病患核對錯誤代碼無效。', false);
+  }
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw pfError_('BUSY', '同步確認忙碌，請稍後再試。', true);
+  try {
+    var sheet = historyRegistry_(false, qaSheet);
+    var rows = sheet.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) !== id) continue;
+      var row = rows[i].slice(0, PF_HISTORY_HEADERS.length);
+      var target = status === 'committed_overlay' ? 'synced' : 'rejected_patient';
+      if (row[10] !== 'pending') {
+        if (row[10] === target && String(row[9] || '') === overlayId && String(row[16] || '') === errorCode) {
+          return { ok: true, apiVersion: ACT_PF_API_VERSION, duplicate: true, eventId: id, record: historyRecord_(i + 1, row) };
+        }
+        throw pfError_('ACK_CONFLICT', '此事件已有不同的同步結果，停止覆寫。', false);
+      }
+      row[9] = overlayId; row[10] = target; row[11] = committedAt; row[15] = new Date().toISOString();
+      row[16] = errorCode; row[17] = errorCode ? '病歷核對未通過，需人工確認；未寫入 Overlay。' : '';
+      sheet.getRange(i + 1, 1, 1, PF_HISTORY_HEADERS.length).setValues([row]);
+      SpreadsheetApp.flush();
+      var confirmed = sheet.getRange(i + 1, 1, 1, PF_HISTORY_HEADERS.length).getValues()[0];
+      if (historyVersion_(i + 1, confirmed) !== historyVersion_(i + 1, row)) throw pfError_('WRITE_NOT_CONFIRMED', '未能確認同步狀態，請以相同事件識別重試。', true);
+      return { ok: true, apiVersion: ACT_PF_API_VERSION, duplicate: false, eventId: id, record: historyRecord_(i + 1, confirmed) };
+    }
+    throw pfError_('RECORD_NOT_FOUND', '找不到 PF 事件。', false);
+  } finally { lock.releaseLock(); }
+}
+
+function handlePFAck_(params) { requireHistorySecret_(params, true); return historyAck_(params); }
+
+/** Owner only, manual editor invocation. Never logs or returns generated credentials. */
+function initializePFHistoryAccess() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('Initialization busy');
+  try {
+    var properties = PropertiesService.getScriptProperties();
+    var nurse = properties.getProperty('ACT_NURSE_PIN');
+    var sync = properties.getProperty('ACT_PF_SYNC_KEY');
+    var pinCreated = !nurse || nurse === ACT_LEGACY_NURSE_PIN;
+    var keyCreated = !sync;
+    if (pinCreated) {
+      nurse = ('000000000000' + parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 12), 16).toString()).slice(-12);
+      properties.setProperty('ACT_NURSE_PIN', nurse);
+    }
+    if (keyCreated) {
+      sync = 'pf_' + Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+      properties.setProperty('ACT_PF_SYNC_KEY', sync);
+    }
+    historyRegistry_(true);
+    var report = { ok: nurse.length >= 8 && nurse !== ACT_LEGACY_NURSE_PIN && sync.length >= 32,
+      release: ACT_PF_RELEASE, nursePinCreated: pinCreated, syncKeyCreated: keyCreated,
+      nursePinConfigured: nurse.length >= 8 && nurse !== ACT_LEGACY_NURSE_PIN,
+      syncKeyConfigured: sync.length >= 32, registryReady: true };
+    console.log(JSON.stringify(report)); return report;
+  } finally { lock.releaseLock(); }
+}
+
+/** All writes stay on the named synthetic registry. No ACT lookup, Overlay call, or email. */
+function runIsolatedPFHistoryCloudSelfTest() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var name = 'ACT PF History QA 20261124';
+  var qa = ss.getSheetByName(name) || ss.insertSheet(name);
+  if (qa.getName() !== name) throw new Error('QA registry guard failed');
+  historyRegistry_(true, qa);
+  var eventId = 'qa-history-' + Utilities.getUuid();
+  var params = { eventId: eventId, chartNumber: '0000001', peakFlow: '95', assessmentDate: historyToday_() };
+  var first = historyWriteEvent_(params, 'mobile_pf', qa);
+  var retry = historyWriteEvent_(params, 'mobile_pf', qa);
+  var ack = historyAck_({ eventId: eventId, overlayId: '999999999', committedAt: new Date().toISOString() }, qa);
+  var report = { ok: first.ok && retry.duplicate && ack.record.syncStatus === 'synced', release: ACT_PF_RELEASE,
+    syntheticOnly: true, sheet: name, registryReadback: first.record.peakFlow === 95,
+    idempotentRetry: retry.duplicate, syntheticAckRoundtrip: ack.ok };
+  console.log(JSON.stringify(report)); return report;
+}
 
 function buildReportHtml(name, testType, score, level, levelDesc, weatherSuggestion) {
   var levelColor = '#22c55e';
