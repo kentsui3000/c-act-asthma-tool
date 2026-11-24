@@ -60,9 +60,6 @@ $nodeFile = Get-Item -LiteralPath $NodePath -ErrorAction Stop
 if ($nodeFile.PSIsContainer -or $nodeFile.Name -ne 'node.exe') { throw 'NodePath must identify node.exe.' }
 $nodeFullPath = $nodeFile.FullName
 
-$nodeFile = Get-Item -LiteralPath $NodePath -ErrorAction Stop
-if ($nodeFile.PSIsContainer -or $nodeFile.Name -ne 'node.exe') { throw 'NodePath must be the full path to node.exe.' }
-$nodeFullPath = $nodeFile.FullName
 $sourcePath = Join-Path $PSScriptRoot 'pf_bridge.cjs'
 $installedPath = Join-Path $bridgeHome 'pf_bridge.cjs'
 $pidPath = Join-Path $bridgeHome 'worker.pid'
@@ -115,36 +112,40 @@ $manifest = @{ schemaVersion = 1; nodePath = $nodeFullPath; scriptPath = $instal
 $manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $bridgeHome 'install.json') -Encoding utf8
 $shortcut.Save()
 
+$healthy = $false
+$processVerified = $false
 if ($StartIfConfigured) {
     if (Test-Path -LiteralPath $stopMarker) { Remove-Item -LiteralPath $stopMarker }
     $startedAt = [DateTimeOffset]::UtcNow
     Start-Process -FilePath $wscriptPath -ArgumentList @('//B', '//Nologo', ('"{0}"' -f $launcherPath)) -WindowStyle Hidden | Out-Null
     $healthPath = Join-Path $bridgeHome 'health.json'
-    $healthy = $false
-    for ($attempt = 0; $attempt -lt 40; $attempt++) {
+    $quotedScriptPattern = '(?i)(?:^|\s)"' + [regex]::Escape($installedPath) + '"(?:\s|$)'
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
         Start-Sleep -Milliseconds 500
-        if (Test-Path -LiteralPath $healthPath) {
-            try {
-                $health = Get-Content -LiteralPath $healthPath -Raw | ConvertFrom-Json
-                if ([DateTimeOffset]::Parse($health.startedAt) -ge $startedAt.AddSeconds(-1)) {
-                    if ($health.errorCode) {
-                        $safeCode = if ([string]$health.errorCode -match '^[A-Z0-9_]+$') { [string]$health.errorCode } else { 'BRIDGE_CYCLE_FAILED' }
-                        throw "Bridge health check failed: $safeCode"
-                    }
-                    $healthy = $true; break
-                }
-            } catch {
-                if ($_.Exception.Message -like 'Bridge health check failed:*') { throw }
+        $pidText = if (Test-Path -LiteralPath $pidPath) { (Get-Content -LiteralPath $pidPath -Raw).Trim() } else { '' }
+        if ($pidText -match '^\d+$' -and [long]$pidText -le [int]::MaxValue) {
+            $worker = Get-CimInstance Win32_Process -Filter ('ProcessId={0}' -f [int]$pidText) -ErrorAction SilentlyContinue
+            if ($worker -and $worker.ExecutablePath -eq $nodeFullPath -and $worker.CommandLine -match $quotedScriptPattern) {
+                $processVerified = $true; break
             }
         }
     }
-    if (-not $healthy) { throw 'Startup was requested but a fresh successful health check was not confirmed. Inspect health.json and startup-error.txt; no clinical synchronization is claimed.' }
-    $pidText = if (Test-Path -LiteralPath (Join-Path $bridgeHome 'worker.pid')) { (Get-Content -LiteralPath (Join-Path $bridgeHome 'worker.pid') -Raw).Trim() } else { '' }
-    if ($pidText -notmatch '^\d+$' -or [long]$pidText -gt [int]::MaxValue) { throw 'A fresh health result exists, but worker identity was not confirmed.' }
-    $worker = Get-CimInstance Win32_Process -Filter ('ProcessId={0}' -f [int]$pidText) -ErrorAction SilentlyContinue
-    $quotedScriptPattern = '(?i)(?:^|\s)"' + [regex]::Escape($installedPath) + '"(?:\s|$)'
-    if (-not $worker -or $worker.ExecutablePath -ne $nodeFullPath -or $worker.CommandLine -notmatch $quotedScriptPattern) {
-        throw 'Bridge worker identity could not be verified. No clinical synchronization is claimed.'
+    if (-not $processVerified) { throw 'Bridge worker identity could not be verified. Inspect startup-error.txt; no clinical synchronization is claimed.' }
+    if (Test-Path -LiteralPath $healthPath) {
+        try {
+            $health = Get-Content -LiteralPath $healthPath -Raw | ConvertFrom-Json
+            if ([DateTimeOffset]::Parse($health.startedAt) -ge $startedAt.AddSeconds(-1)) {
+                if ($health.errorCode) {
+                    $safeCode = if ([string]$health.errorCode -match '^[A-Z0-9_]+$') { [string]$health.errorCode } else { 'BRIDGE_CYCLE_FAILED' }
+                    throw "Bridge health check failed: $safeCode"
+                }
+                $healthy = $true
+            }
+        } catch {
+            if ($_.Exception.Message -like 'Bridge health check failed:*') { throw }
+        }
     }
 }
-[pscustomobject]@{ Installed = $true; Started = [bool]$StartIfConfigured; PrivateDirectory = $bridgeHome; StartupShortcut = $shortcutPath; WorkerSha256 = (Get-FileHash -LiteralPath $installedPath -Algorithm SHA256).Hash }
+[pscustomobject]@{ Installed = $true; Started = [bool]$StartIfConfigured; ProcessVerified = $processVerified;
+    HealthPending = [bool]($StartIfConfigured -and -not $healthy); HealthyCycleVerified = $healthy;
+    PrivateDirectory = $bridgeHome; StartupShortcut = $shortcutPath; WorkerSha256 = (Get-FileHash -LiteralPath $installedPath -Algorithm SHA256).Hash }

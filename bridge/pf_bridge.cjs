@@ -59,9 +59,9 @@ class Bridge {
         let committed=exactCommit(probed(await this.overlay.query(committedSQL(e.eventId))),e);
         if(!committed) {
           const patients=probed(await this.overlay.query(patientSQL(e.chartNumber)));
-          if(patients.length>1||patients.some(p=>p.kind!=='patient'||chart(p.kcstmr)!==e.chartNumber))fail('PATIENT_LOOKUP_INVALID');
-          if(!patients.length) {
-            acknowledgement(await this.cloud.call('pf_ack',{eventId:e.eventId,status:'rejected_patient',errorCode:'PATIENT_NOT_FOUND'}),e,'rejected_patient');result.rejected++;continue;
+          if(patients.some(p=>p.kind!=='patient'||chart(p.kcstmr)!==e.chartNumber))fail('PATIENT_LOOKUP_INVALID');
+          if(patients.length!==1) {
+            acknowledgement(await this.cloud.call('pf_ack',{eventId:e.eventId,status:'rejected_patient',errorCode:patients.length?'PATIENT_AMBIGUOUS':'PATIENT_NOT_FOUND'}),e,'rejected_patient');result.rejected++;continue;
           }
           // This endpoint only acknowledges enqueueing. Its response is never proof of commit.
           try { await this.overlay.postPF({patient_id:'CHART-'+String(Number(e.chartNumber)),kcstmr:e.chartNumber,value_lpm:e.peakFlow,assessment_date:e.assessmentDate,entered_by:'act_pf_sync:'+e.eventId,notes:'ACT mobile PF back-entry'}); } catch (_) { /* An uncertain enqueue is resolved by exact readback below. */ }

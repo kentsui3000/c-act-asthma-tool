@@ -6,6 +6,10 @@ if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is unavailable.' }
 $bridgeHome = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'ClinicACTPFBridge'))
 $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd('\') + '\'
 if (-not $bridgeHome.StartsWith($localRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid private directory.' }
+if ((Test-Path -LiteralPath $bridgeHome) -and
+    ((Get-Item -LiteralPath $bridgeHome -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw 'Private directory cannot be a reparse point. No process was stopped.'
+}
 $manifestPath = Join-Path $bridgeHome 'install.json'
 $installedPath = Join-Path $bridgeHome 'pf_bridge.cjs'
 $pidPath = Join-Path $bridgeHome 'worker.pid'
