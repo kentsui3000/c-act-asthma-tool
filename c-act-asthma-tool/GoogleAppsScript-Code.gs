@@ -19,7 +19,7 @@
  */
 
 var ACT_PF_API_VERSION = 2;
-var ACT_PF_RELEASE = '2026-11-24-pf-history1';
+var ACT_PF_RELEASE = '2026-11-24-pf-history2';
 // Urgent compatibility fallback. This legacy PIN has appeared in public source;
 // it is not strong authentication. Set ACT_NURSE_PIN in Script Properties to
 // rotate it without publishing a new client-side credential.
@@ -385,8 +385,10 @@ function historyHash_(text) {
 function requireHistorySecret_(params, sync) {
   var key = sync ? 'ACT_PF_SYNC_KEY' : 'ACT_NURSE_PIN';
   var configured = PropertiesService.getScriptProperties().getProperty(key);
-  if (!configured || configured === ACT_LEGACY_NURSE_PIN || configured.length < (sync ? 32 : 8)) {
-    throw pfError_('AUTH_NOT_CONFIGURED', '歷史 PF 存取尚未完成私人憑證設定，請聯絡管理者。', false);
+  // Staff PINs are accepted only from an explicit property, never the legacy fallback.
+  // The independently configured service key keeps its stronger minimum length.
+  if (!configured || !configured.trim() || configured.length < (sync ? 32 : 4)) {
+    throw pfError_('AUTH_NOT_CONFIGURED', '歷史 PF 存取尚未完成憑證設定，請聯絡管理者。', false);
   }
   var supplied = String(params[sync ? 'syncKey' : 'pin'] || '');
   var difference = supplied.length ^ configured.length;
@@ -726,8 +728,8 @@ function initializePFHistoryAccess() {
     var properties = PropertiesService.getScriptProperties();
     var nurse = properties.getProperty('ACT_NURSE_PIN');
     var sync = properties.getProperty('ACT_PF_SYNC_KEY');
-    var pinCreated = !nurse || nurse === ACT_LEGACY_NURSE_PIN;
-    var keyCreated = !sync;
+    var pinCreated = nurse === null;
+    var keyCreated = sync === null;
     if (pinCreated) {
       nurse = ('000000000000' + parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 12), 16).toString()).slice(-12);
       properties.setProperty('ACT_NURSE_PIN', nurse);
@@ -737,10 +739,12 @@ function initializePFHistoryAccess() {
       properties.setProperty('ACT_PF_SYNC_KEY', sync);
     }
     historyRegistry_(true);
-    var report = { ok: nurse.length >= 8 && nurse !== ACT_LEGACY_NURSE_PIN && sync.length >= 32,
+    var nurseConfigured = !!nurse.trim() && nurse.length >= 4;
+    var syncConfigured = !!sync.trim() && sync.length >= 32;
+    var report = { ok: nurseConfigured && syncConfigured,
       release: ACT_PF_RELEASE, nursePinCreated: pinCreated, syncKeyCreated: keyCreated,
-      nursePinConfigured: nurse.length >= 8 && nurse !== ACT_LEGACY_NURSE_PIN,
-      syncKeyConfigured: sync.length >= 32, registryReady: true };
+      nursePinConfigured: nurseConfigured,
+      syncKeyConfigured: syncConfigured, registryReady: true };
     console.log(JSON.stringify(report)); return report;
   } finally { lock.releaseLock(); }
 }

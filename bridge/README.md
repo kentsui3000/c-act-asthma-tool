@@ -2,13 +2,13 @@
 
 這是獨立的同步工作程序。臨床資料只透過執行中的 Overlay HTTP API 存取；它不直接開啟 DuckDB、DBF 或 HIS 檔案，也不需要重新啟動 Overlay、Tray 或 TK Panel。
 
-目前為 **候選程式已備妥、正式安裝及發布尚待記錄**。請先依 [部署與回復手冊](../repair-delivery/20261124-history/DEPLOY_AND_ROLLBACK_ZH.md) 完成 Google 擁有者初始化、配對部署及本機私人設定。不要把候選程式存在磁碟上當成工作程序已執行。
+截至 2026-11-24 15:23（Asia/Taipei），**Google 擁有者初始化與手機前端發布已完成；worker 私人設定、安裝及啟動尚待完成**。15:22 已請使用者明確同意將同步金鑰保存於這台電腦，回覆前不保存或啟動。請依 [部署與回復手冊](../repair-delivery/20261124-history/DEPLOY_AND_ROLLBACK_ZH.md) 完成本機設定。前端已發布或程式檔已存在，不代表 bridge 已執行或正式雙向同步已驗收。
 
 ## 資料方向
 
 | 方向 | 路徑 | 成功依據 |
 | --- | --- | --- |
-| TK 桌面 → 手機 | Overlay API 的有效 PF 列 → `pf_sync` → `PF Records` → 手機 `nurse_history` | 雲端回執的事件、病歷、日期、數值及 Overlay ID 一致 |
+| 桌面輸入 → 手機 | Overlay API 的有效 PF 列 → `pf_sync` → `PF Records` → 手機 `nurse_history` | 雲端回執的事件、病歷、日期、數值及 Overlay ID 一致 |
 | 手機 → Overlay | `pf_record` → Google `PF Records` pending → bridge 病歷核對 → Overlay PF 佇列 → 精確讀回 → `pf_ack` | 精確讀回已存在的臨床列後，才可把 Google 狀態改成 synced |
 
 Overlay 接受排入佇列不代表資料已寫入。worker 以穩定 `entered_by=act_pf_sync:<eventId>` 查回病歷、日期、值、來源及實際列 ID，避免把排隊回應或逾時誤認為完成。病歷不存在時送出 `rejected_patient`，不創造臨床病患。
@@ -17,7 +17,8 @@ Overlay 接受排入佇列不代表資料已寫入。worker 以穩定 `entered_b
 
 - 病歷號標準化為 7 位數字，不以姓名猜配；PF 為 50–900 L/min 整數。
 - 手機可查已存在於 ACT / PF 雲端資料中的過去日期，每次最多 31 天；查歷史必須填精確病歷號，空病歷號只允許今天全部記錄。
-- 桌面向外同步只選取 `assessment_type=PF`、`source=manual`、`entered_by=tray_panel`、未被 supersede，且登錄時間 `created_at` 不早於固定 `bootstrapSince` 的遞增 ID。首次啟動用當時往前 31 天建立此起點並存入 state；之後不隨日期滑動。若 2026-11-24 首次啟動，起點為 2026-10-25。實際量測日期可以更早；這不是全歷史匯出。
+- 桌面向外同步只選取 `assessment_type=PF`、`source=manual`、`entered_by` 為 `tray_panel` 或 `dr_tsui`、未被 supersede，且登錄時間 `created_at` 不早於固定 `bootstrapSince` 的遞增 ID。首次啟動用當時往前 31 天建立此起點並存入 state；之後不隨日期滑動。若 2026-11-24 首次啟動，起點為 2026-10-25。實際量測日期可以更早；這不是全歷史匯出。
+- `dr_tsui` 是既有 Overlay PF API 的預設輸入者標記；它與 `tray_panel` 都必須同時符合 `source=manual` 及未被 supersede。Google Sheets 來源與失效／被 supersede 的列不匯出。
 - `source=manual_edit` 的更正紀錄不在上述來源白名單；本輪沒有實作更正版本的自動回傳。不要把它標成已同步，也不要把舊事件移植到新來源。
 - 獨立 PF 是獨立量測，不會自動回填 ACT Records 的 P 欄，不會製造空分數 ACT，不會改題目或寄信。
 - 手機事件 ID 對同一重試保持不變；同一天已有量測時，必須明確確認新增另一筆。跨來源數值不自動覆寫。
@@ -49,7 +50,7 @@ worker 使用 `127.0.0.1:18769` 作為單一工作程序鎖，Overlay 目標固�
 }
 ```
 
-上述內容為格式範例，不是可用憑證。`ACT_PF_SYNC_KEY` 最少 32 字元；手機管理密碼 `ACT_NURSE_PIN` 最少 8 字元，且不能使用原公開的相容 PIN。worker 不需要管理密碼。
+上述內容為格式範例，不是可用憑證。`ACT_PF_SYNC_KEY` 最少 32 字元；工作人員管理 PIN `ACT_NURSE_PIN` 最少 4 字元且不能全為空白，後端只接受此 Script Property 明確配置的值；缺少設定不會回退到任何歷史相容 PIN。這是工作人員登入 PIN，與服務同步金鑰分開管理。worker 不需要管理 PIN。
 
 ## 安裝、執行及停止
 
@@ -59,7 +60,7 @@ worker 使用 `127.0.0.1:18769` 作為單一工作程序鎖，Overlay 目標固�
 .\bridge\install.ps1 -PrepareOnly
 ```
 
-先建立私人目錄及 ACL，接著由擁有者完成 Google 初始化，再使用本機設定頁將同步金鑰寫入私人 `config.json`。未設定完整前不啟動正式同步。
+私人目錄及 ACL 已在準備階段建立；擁有者已於 15:20:53 完成 Google 初始化。下一步須取得使用者對本機金鑰保存的明確同意，再使用本機設定頁將同步金鑰寫入私人 `config.json`。未設定完整前不啟動正式同步。
 
 ```powershell
 .\bridge\install.ps1 -StartIfConfigured
@@ -95,4 +96,8 @@ bridge 新增的是獨立 manual PF，本身不覆寫舊量測。但既有 Sheet
 node --test tests/backend-pf.cjs tests/backend-history-contract.cjs tests/frontend-nurse.test.cjs tests/frontend-history.test.cjs tests/integration-nurse.cjs tests/bridge-adversarial.cjs
 ```
 
-最後一次文件核對執行回報 103 項通過、0 失敗（應用／API 82、bridge 21）。所有 adapter 為合成替身，不連 Google、Overlay 或任何資料庫。
+接受明確配置的 4 碼管理 PIN 後，候選完整六檔驗證回報 108 項通過、0 失敗。所有 adapter 為合成替身，不連 Google、Overlay 或任何資料庫。
+
+## 使用者指定管理 PIN 的後續修訂
+
+候選 `2026-11-24-pf-history2` 接受 `ACT_NURSE_PIN` 已明確配置的至少 4 字元管理 PIN，不設前端 PIN 值、不在缺少 property 時使用預設回退。服務端 `ACT_PF_SYNC_KEY` 仍需至少 32 字元，沒有放寬。候選測試已驗證指定 4 碼 PIN 可登入、缺少屬性仍拒絕；Google 屬性的實際輸入及正式登入確認仍由使用者／主代理完成，不因離線測試而宣稱已變更。

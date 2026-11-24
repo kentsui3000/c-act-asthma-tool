@@ -88,6 +88,21 @@ test('actual backend and bridge agree on outbound synced and inbound pending con
   assert.equal(h.backend.emails.length, 0);
 });
 
+test('existing Overlay API default manual creator exports without accepting Sheets or mobile echoes', async () => {
+  const h=setup({outgoing:[{...outgoing(43),entered_by:'dr_tsui'}]});
+  const result=await h.bridge().cycle();
+  assert.equal(result.errorCode,null);assert.equal(result.exported,1);
+  const record=h.backend.history({chartNumber:'123'}).pfRecords[0];
+  assert.equal(record.eventId,'overlay:clinical_assessments:43');assert.equal(record.peakFlow,95);
+  assert.equal(record.source,'overlay_manual');assert.equal(record.syncStatus,'synced');
+  assert.match(exportSQL(0,'2026-10-25'),/superseded_by IS NULL/);
+  for(const row of [{...outgoing(44),source:'google_sheets'}, {...outgoing(44),entered_by:'act_pf_sync:mobile-event-123'}]){
+    const rejected=setup({outgoing:[row]});
+    assert.equal((await rejected.bridge().cycle()).errorCode,'OUTBOUND_SOURCE_INVALID');
+    assert.equal(rejected.cloudCalls.length,0);assert.equal(rejected.state.outCursor,0);
+  }
+});
+
 test('queued-only HTTP success cannot acknowledge a clinical commit', async () => {
   const h = setup({ mobileEvents: [{ id: eventA }], queuedOnly: true });
   const result = await h.bridge().cycle();

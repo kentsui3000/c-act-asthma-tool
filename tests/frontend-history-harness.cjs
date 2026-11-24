@@ -23,7 +23,7 @@ function harness(fetcher){
  vm.createContext(context);vm.runInContext(source.replace('    })();','globalThis.app={nurseRequest,getCactTotal,getActTotal,allCactAnswered,allActAnswered,getLevelChild,getLevelAdult,sendReportAndSave,nurseState,nurseToday,normalizedChart,historyQuery,validHistoryDate,validHistoryPayload,renderNurseHistory,loadNurseList,validPeakFlow,pfPayload,savePfRecord,resetPfAttempt,pfSyncLabel,pfNeedsReview,initializeNurseDates,updatePfPatientNotice,taipeiTimestamp};\n    })();'),context);
  return{app:context.app,nodes,calls,timers,selected,advance:ms=>now+=ms};
 }
-function staff(h){h.app.nurseState.pin='new-private-secret';h.app.nurseState.session=1;h.app.initializeNurseDates();}
+function staff(h){h.app.nurseState.pin='3613';h.app.nurseState.session=1;h.app.initializeNurseDates();}
 function fillPf(h,values={}){h.nodes.get('pf-chart').value=values.chart??'123';h.nodes.get('pf-date').value=values.date??'2026-11-23';h.nodes.get('pf-value').value=values.value??'95';}
 const act={rowIndex:2,rowKey:'act1',chartNumber:'0000123',chart:'0000123',name:'Synthetic',testType:'C-ACT',score:0,peakFlow:'',level:'test',assessmentDate:'2026-11-24',recordedAt:'2026-11-24T01:00:00Z'};
 const pf={eventId:'desk1',chartNumber:'0000123',peakFlow:95,assessmentDate:'2026-11-24',measuredAt:'',recordedAt:'2026-11-24T02:00:00Z',source:'overlay_manual',overlayId:77,syncStatus:'synced',versionKey:'v1'};

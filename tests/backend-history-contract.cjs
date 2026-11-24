@@ -95,11 +95,11 @@ if (require.main === module) {
 test('history release is exact, both copies match, and no new MailApp scope', () => {
   assert.equal(source, fs.readFileSync(path.join(root, 'c-act-asthma-tool', 'GoogleAppsScript-Code.gs'), 'utf8'));
   const h = harness(); const health = JSON.parse(h.ctx.doGet({ parameter: { mode: 'health' } }).text);
-  assert.equal(health.release, '2026-11-24-pf-history1'); assert.doesNotMatch(source, /\bMailApp\s*\./);
+  assert.equal(health.release, '2026-11-24-pf-history2'); assert.doesNotMatch(source, /\bMailApp\s*\./);
 });
 
-test('all new modes reject missing private credentials and public legacy fallback', () => {
-  for (const properties of [{}, { ACT_NURSE_PIN: harness().ctx.ACT_LEGACY_NURSE_PIN }]) {
+test('all new modes reject missing, blank, or too-short explicit credentials', () => {
+  for (const properties of [{}, { ACT_NURSE_PIN: '', ACT_PF_SYNC_KEY: '' }, { ACT_NURSE_PIN: '123', ACT_PF_SYNC_KEY: 'short' }]) {
     const h = harness({ properties });
     for (const mode of ['nurse_history', 'pf_record', 'pf_sync', 'pf_events', 'pf_ack']) {
       assert.equal(h.post(mode).error.code, 'AUTH_NOT_CONFIGURED');
@@ -108,6 +108,27 @@ test('all new modes reject missing private credentials and public legacy fallbac
   }
   const h = harness(); assert.equal(h.history({ pin: 'wrong' }).error.code, 'AUTH_FAILED');
   assert.equal(h.overlay({ syncKey: 'wrong' }).error.code, 'AUTH_FAILED');
+});
+
+test('explicit configured four-digit staff PIN works while absent property has no legacy fallback', () => {
+  const h = harness({ properties: { ACT_NURSE_PIN: '3613', ACT_PF_SYNC_KEY: syncKey } });
+  assert.equal(h.history({ pin: '3613' }).ok, true);
+  assert.equal(h.mobile({ pin: '3613' }).ok, true);
+  assert.equal(h.history({ pin: '3614' }).error.code, 'AUTH_FAILED');
+  const missing = harness({ properties: { ACT_PF_SYNC_KEY: syncKey } });
+  assert.equal(missing.history({ pin: '3613' }).error.code, 'AUTH_NOT_CONFIGURED');
+  const blank = harness({ properties: { ACT_NURSE_PIN: '    ', ACT_PF_SYNC_KEY: syncKey } });
+  assert.equal(blank.history({ pin: '    ' }).error.code, 'AUTH_NOT_CONFIGURED');
+});
+
+test('staff PIN never substitutes for the independently configured strong synchronization key', () => {
+  const h = harness({ properties: { ACT_NURSE_PIN: '3613', ACT_PF_SYNC_KEY: syncKey } });
+  assert.equal(h.post('pf_events', { syncKey: '3613' }).error.code, 'AUTH_FAILED');
+  assert.equal(h.overlay({ syncKey: '3613' }).error.code, 'AUTH_FAILED');
+  const weakService = harness({ properties: { ACT_NURSE_PIN: '3613', ACT_PF_SYNC_KEY: '3613' } });
+  assert.equal(weakService.post('pf_events', { syncKey: '3613' }).error.code, 'AUTH_NOT_CONFIGURED');
+  assert.equal(weakService.overlay({ syncKey: '3613' }).error.code, 'AUTH_NOT_CONFIGURED');
+  assert.equal(weakService.writes.length, 0);
 });
 
 test('exact chart normalization, Taipei midnight, and zero ACT score are preserved', () => {
@@ -283,9 +304,19 @@ test('owner initialization preserves existing private values and isolated QA nev
 });
 
 test('initializer preserves existing private values and reports unusable short configuration', () => {
-  const h = harness({ properties: { ACT_NURSE_PIN: 'short', ACT_PF_SYNC_KEY: 'short-private-sync' } });
+  const h = harness({ properties: { ACT_NURSE_PIN: '123', ACT_PF_SYNC_KEY: 'short-private-sync' } });
   const report = h.ctx.initializePFHistoryAccess();
   assert.equal(report.ok, false); assert.equal(h.propertyWrites.length, 0);
   assert.equal(h.history().error.code, 'AUTH_NOT_CONFIGURED');
+});
+
+test('initializer preserves an explicitly configured staff PIN and never prints its value', () => {
+  const h = harness({ properties: { ACT_NURSE_PIN: '3613', ACT_PF_SYNC_KEY: syncKey } });
+  const report = h.ctx.initializePFHistoryAccess();
+  assert.equal(report.ok, true); assert.equal(report.nursePinConfigured, true); assert.equal(report.nursePinCreated, false);
+  assert.equal(h.properties.get('ACT_NURSE_PIN'), '3613'); assert.equal(h.propertyWrites.length, 0);
+  assert.equal((JSON.stringify(report) + h.logs.join('')).includes('3613'), false);
+  const blank = harness({ properties: { ACT_NURSE_PIN: '', ACT_PF_SYNC_KEY: syncKey } });
+  assert.equal(blank.ctx.initializePFHistoryAccess().ok, false); assert.equal(blank.propertyWrites.length, 0);
 });
 }

@@ -14,8 +14,11 @@ function eventId(value) { if(typeof value!=='string'||! /^[A-Za-z0-9_-]{8,100}$/
 function positiveId(value) { const n=Number(value); if(!Number.isSafeInteger(n)||n<1)fail('INVALID_OVERLAY_ID');return n; }
 function stamp(value) { const s=String(value??'').trim().replace(' ','T');const z=/([zZ]|[+-]\d{2}:\d{2})$/.test(s)?s:s+'+08:00';if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i.test(z)||!Number.isFinite(Date.parse(z)))fail('INVALID_COMMIT_TIME');return z; }
 const projection="id,kcstmr,CAST(assessment_date AS VARCHAR) AS assessment_date,score,source,entered_by,CAST(created_at AS VARCHAR) AS created_at";
+// dr_tsui is the existing Overlay PF API's default creator; tray_panel is
+// the persistent panel's explicit creator. Mobile bridge tags stay excluded.
+const outboundCreators=Object.freeze(['tray_panel','dr_tsui']);
 const sentinel="SELECT 'probe' AS kind,NULL::BIGINT AS id,NULL::VARCHAR AS kcstmr,NULL::VARCHAR AS assessment_date,NULL::DOUBLE AS score,NULL::VARCHAR AS source,NULL::VARCHAR AS entered_by,NULL::VARCHAR AS created_at UNION ALL SELECT 'event',id,kcstmr,assessment_date,score,source,entered_by,created_at FROM (";
-function exportSQL(cursor,since,limit=25) { if(!Number.isSafeInteger(cursor)||cursor<0||!Number.isSafeInteger(limit)||limit<1||limit>100)fail('INVALID_CURSOR');return sentinel+`SELECT ${projection} FROM clinical_assessments WHERE assessment_type='PF' AND source='manual' AND entered_by='tray_panel' AND superseded_by IS NULL AND id>${cursor} AND created_at>='${day(since)}'::TIMESTAMP ORDER BY id LIMIT ${limit}) q`; }
+function exportSQL(cursor,since,limit=25) { if(!Number.isSafeInteger(cursor)||cursor<0||!Number.isSafeInteger(limit)||limit<1||limit>100)fail('INVALID_CURSOR');return sentinel+`SELECT ${projection} FROM clinical_assessments WHERE assessment_type='PF' AND source='manual' AND entered_by IN ('tray_panel','dr_tsui') AND superseded_by IS NULL AND id>${cursor} AND created_at>='${day(since)}'::TIMESTAMP ORDER BY id LIMIT ${limit}) q`; }
 function committedSQL(id) { return sentinel+`SELECT ${projection} FROM clinical_assessments WHERE assessment_type='PF' AND entered_by='act_pf_sync:${eventId(id)}' ORDER BY id LIMIT 3) q`; }
 function patientSQL(kc) { return `SELECT 'probe' AS kind,NULL::VARCHAR AS kcstmr UNION ALL SELECT 'patient',KCSTMR FROM patients WHERE KCSTMR='${chart(kc)}' LIMIT 3`; }
 function probed(response) { const rows=response?.rows;if(!Array.isArray(rows)||rows.filter(r=>r.kind==='probe').length!==1||rows.some(r=>!['probe','event','patient'].includes(r.kind)))fail('DB_READ_UNCONFIRMED');return rows.filter(r=>r.kind!=='probe'); }
@@ -41,10 +44,10 @@ class Bridge {
       // Validate the whole page before advancing any checkpoint; a malformed
       // or reordered response must not strand a lower id behind the cursor.
       let previous=this.state.outCursor;
-      for(const row of outgoing){const id=positiveId(row.id);if(id<=previous)fail('OUTBOUND_ORDER_INVALID');previous=id;if(row.source!=='manual'||row.entered_by!=='tray_panel')fail('OUTBOUND_SOURCE_INVALID');chart(row.kcstmr);score(row.score);day(row.assessment_date);stamp(row.created_at);}
+      for(const row of outgoing){const id=positiveId(row.id);if(id<=previous)fail('OUTBOUND_ORDER_INVALID');previous=id;if(row.source!=='manual'||!outboundCreators.includes(row.entered_by))fail('OUTBOUND_SOURCE_INVALID');chart(row.kcstmr);score(row.score);day(row.assessment_date);stamp(row.created_at);}
       for(const row of outgoing) {
         const id=positiveId(row.id);if(id<=this.state.outCursor)fail('OUTBOUND_ORDER_INVALID');
-        if(row.source!=='manual'||row.entered_by!=='tray_panel')fail('OUTBOUND_SOURCE_INVALID');
+        if(row.source!=='manual'||!outboundCreators.includes(row.entered_by))fail('OUTBOUND_SOURCE_INVALID');
         const e={eventId:'overlay:clinical_assessments:'+id,sourceEventId:String(id),chartNumber:chart(row.kcstmr),peakFlow:score(row.score),assessmentDate:day(row.assessment_date),recordedAt:stamp(row.created_at)};
         const ack=acknowledgement(await this.cloud.call('pf_sync',e),e,'synced');
         if(positiveId(ack.overlayId)!==id)fail('CLOUD_OVERLAY_ID_MISMATCH');

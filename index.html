@@ -567,7 +567,7 @@
       </div>
       <div id="nurse-login" class="start-card">
         <h2 style="font-size:1.2rem;">管理模式登入</h2>
-        <p style="font-size:.9rem;">請使用管理員提供的新版管理密碼。</p>
+        <p style="font-size:.9rem;">請使用管理員提供的管理密碼。</p>
         <div class="nurse-field">
           <label for="nurse-password">管理密碼</label>
           <input id="nurse-password" type="password" autocomplete="current-password" placeholder="輸入或貼上管理密碼">
@@ -741,7 +741,7 @@
         page.classList.add('active');
       }
 
-      // ── Nurse Mode: private history and independent PF records ──
+      // ── Nurse Mode: authenticated history and independent PF records ──
       function nurseError(message, code) {
         var error = new Error(message);
         error.code = code;
@@ -836,7 +836,7 @@
         return 'Google 已儲存／待 Overlay 同步';
       }
       function sourceLabel(source) {
-        if (source === 'overlay_manual') return 'TK桌面';
+        if (source === 'overlay_manual') return '桌面輸入';
         if (source === 'mobile_pf') return '手機補登';
         return '來源未確認';
       }

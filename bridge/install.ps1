@@ -11,29 +11,62 @@ if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is unavailable.' }
 $bridgeHome = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'ClinicACTPFBridge'))
 $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd('\') + '\'
 if (-not $bridgeHome.StartsWith($localRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid private directory.' }
-if (Test-Path -LiteralPath $bridgeHome) {
-    if ((Get-Item -LiteralPath $bridgeHome -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Private directory cannot be a reparse point.' }
-} else { New-Item -ItemType Directory -Path $bridgeHome | Out-Null }
-
 $userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
 $systemSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
-$directoryAcl = [Security.AccessControl.DirectorySecurity]::new()
-$directoryAcl.SetAccessRuleProtection($true, $false)
-$directoryAcl.SetOwner($userSid)
-foreach ($sid in @($userSid, $systemSid)) {
-    $rule = [Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-    $directoryAcl.AddAccessRule($rule)
-}
-Set-Acl -LiteralPath $bridgeHome -AclObject $directoryAcl
-foreach ($file in @(Get-ChildItem -LiteralPath $bridgeHome -File -Force)) {
-    if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Private files cannot be reparse points.' }
-    $fileAcl = [Security.AccessControl.FileSecurity]::new()
-    $fileAcl.SetAccessRuleProtection($true, $false)
-    $fileAcl.SetOwner($userSid)
-    foreach ($sid in @($userSid, $systemSid)) {
-        $fileAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'Allow'))
+
+function Test-BridgePrivateAcl {
+    param([string]$LiteralPath, [switch]$Directory)
+    $item = Get-Item -LiteralPath $LiteralPath -Force -ErrorAction Stop
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Private paths cannot be reparse points.' }
+    $acl = Get-Acl -LiteralPath $LiteralPath -ErrorAction Stop
+    if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $userSid.Value) { return $false }
+    $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+    if ($rules.Count -ne 2) { return $false }
+    if ($Directory -and -not $acl.AreAccessRulesProtected) { return $false }
+    $seen = @{}
+    foreach ($rule in $rules) {
+        $sidValue = $rule.IdentityReference.Value
+        if ($sidValue -ne $userSid.Value -and $sidValue -ne $systemSid.Value) { return $false }
+        if ($seen.ContainsKey($sidValue)) { return $false }
+        $seen[$sidValue] = $true
+        if ($rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or
+            $rule.FileSystemRights -ne [Security.AccessControl.FileSystemRights]::FullControl -or
+            $rule.PropagationFlags -ne [Security.AccessControl.PropagationFlags]::None) { return $false }
+        if ($Directory) {
+            if ($rule.IsInherited -or $rule.InheritanceFlags -ne
+                ([Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit)) { return $false }
+        } elseif (-not $acl.AreAccessRulesProtected -and -not $rule.IsInherited) {
+            # Unprotected files are acceptable only when both private rules were
+            # inherited from the already verified private parent directory.
+            return $false
+        }
     }
-    Set-Acl -LiteralPath $file.FullName -AclObject $fileAcl
+    return $seen.ContainsKey($userSid.Value) -and $seen.ContainsKey($systemSid.Value)
+}
+
+$newPrivateDirectory = $false
+if (Test-Path -LiteralPath $bridgeHome) {
+    if ((Get-Item -LiteralPath $bridgeHome -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Private directory cannot be a reparse point.' }
+} else {
+    New-Item -ItemType Directory -Path $bridgeHome | Out-Null
+    $newPrivateDirectory = $true
+}
+if ($newPrivateDirectory) {
+    # Update only the DACL. Set-Acl with a newly constructed complete security
+    # descriptor can request SeSecurityPrivilege even for an owner-run install.
+    $icaclsPath = Join-Path $env:SystemRoot 'System32\icacls.exe'
+    & $icaclsPath $bridgeHome '/inheritance:r' '/grant:r' ("*{0}:(OI)(CI)F" -f $userSid.Value) '*S-1-5-18:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not create the private directory DACL. Nothing was installed or started.' }
+}
+if (-not (Test-BridgePrivateAcl -LiteralPath $bridgeHome -Directory)) {
+    throw 'Private directory must be owned by the current user with protected user/SYSTEM-only full control. Nothing was installed or started.'
+}
+foreach ($file in @(Get-ChildItem -LiteralPath $bridgeHome -File -Force)) {
+    # No file contents or credentials are read. Strict explicit private ACLs or
+    # the two inherited rules from this verified parent are already sufficient.
+    if (-not (Test-BridgePrivateAcl -LiteralPath $file.FullName)) {
+        throw 'A private file has unexpected permissions. Nothing was installed or started.'
+    }
 }
 
 $configPath = Join-Path $bridgeHome 'config.json'
