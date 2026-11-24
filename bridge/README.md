@@ -2,7 +2,7 @@
 
 這是獨立的同步工作程序。臨床資料只透過執行中的 Overlay HTTP API 存取；它不直接開啟 DuckDB、DBF 或 HIS 檔案，也不需要重新啟動 Overlay、Tray 或 TK Panel。
 
-截至 2026-11-24 15:23（Asia/Taipei），**Google 擁有者初始化與手機前端發布已完成；worker 私人設定、安裝及啟動尚待完成**。15:22 已請使用者明確同意將同步金鑰保存於這台電腦，回覆前不保存或啟動。請依 [部署與回復手冊](../repair-delivery/20261124-history/DEPLOY_AND_ROLLBACK_ZH.md) 完成本機設定。前端已發布或程式檔已存在，不代表 bridge 已執行或正式雙向同步已驗收。
+截至 2026-11-24 20:14（Asia/Taipei），正式程式內容維持已驗證的 `c18de5b`。Google 第 10 版已發布、release 為 `2026-11-24-pf-history2`；手機原問卷 PF 顯示與 worker 正常健康輪次已核對；使用者於 20:14 再次確認原卡片日期是今天。指定管理 PIN 尚未由擁有者實際保存確認，最後驗證仍為 AUTH_FAILED；舊有已配置 PIN 可登入。請依下方安裝、核對與停止步驟操作。程式已發布、worker 正常、指定 PIN 已設定是三個獨立狀態。
 
 ## 資料方向
 
@@ -60,7 +60,7 @@ worker 使用 `127.0.0.1:18769` 作為單一工作程序鎖，Overlay 目標固�
 .\bridge\install.ps1 -PrepareOnly
 ```
 
-私人目錄及 ACL 已在準備階段建立；擁有者已於 15:20:53 完成 Google 初始化。下一步須取得使用者對本機金鑰保存的明確同意，再使用本機設定頁將同步金鑰寫入私人 `config.json`。未設定完整前不啟動正式同步。
+私人目錄及 ACL 已建立；擁有者已於 15:20:53 完成 Google 初始化。本機同步設定亦已由主代理保存，值不放在文件或 Git。下列安裝指令保留作為維護流程；目前是否已有首輪成功健康結果，仍以最新 `health.json` 回執為準。
 
 ```powershell
 .\bridge\install.ps1 -StartIfConfigured
@@ -86,7 +86,7 @@ worker 使用 `127.0.0.1:18769` 作為單一工作程序鎖，Overlay 目標固�
 
 ## 既有 poller 的已知交互作用
 
-bridge 新增的是獨立 manual PF，本身不覆寫舊量測。但既有 Sheets poller 仍可能把「同病歷、同日且數值等於 ACT P 欄」的 manual PF 標為 superseded；稽核列保留，最新視圖可能隱藏它。ACT P 留空的獨立 PF 路徑不受這個同值條件影響。本輪沒有修改或重新載入既有 Overlay poller，不能宣稱此交互作用已消除。
+bridge 新增的是獨立 manual PF，本身不覆寫舊量測。但既有 Sheets poller 仍可能把「同病歷、同日且數值等於 ACT P 欄」的 manual PF 標為 superseded；稽核列保留，最新視圖可能隱藏它。ACT P 留空的獨立 PF 路徑不受這個同值條件影響。不能在沒有現行服務載入與行為證據時宣稱此交互作用已消除。
 
 ## 可重現的隔離驗證
 
@@ -96,8 +96,17 @@ bridge 新增的是獨立 manual PF，本身不覆寫舊量測。但既有 Sheet
 node --test tests/backend-pf.cjs tests/backend-history-contract.cjs tests/frontend-nurse.test.cjs tests/frontend-history.test.cjs tests/integration-nurse.cjs tests/bridge-adversarial.cjs
 ```
 
-接受明確配置的 4 碼管理 PIN 後，候選完整六檔驗證回報 108 項通過、0 失敗。所有 adapter 為合成替身，不連 Google、Overlay 或任何資料庫。
+最後完整六檔驗證回報 109 項通過、0 失敗。所有 adapter 為合成替身，不連 Google、Overlay 或任何資料庫。
 
-## 使用者指定管理 PIN 的後續修訂
+## 管理 PIN 與服務金鑰
 
-候選 `2026-11-24-pf-history2` 接受 `ACT_NURSE_PIN` 已明確配置的至少 4 字元管理 PIN，不設前端 PIN 值、不在缺少 property 時使用預設回退。服務端 `ACT_PF_SYNC_KEY` 仍需至少 32 字元，沒有放寬。候選測試已驗證指定 4 碼 PIN 可登入、缺少屬性仍拒絕；Google 屬性的實際輸入及正式登入確認仍由使用者／主代理完成，不因離線測試而宣稱已變更。
+正式 `2026-11-24-pf-history2` 接受 `ACT_NURSE_PIN` 明確配置的至少 4 字元、非全空白管理 PIN；前端不包含 PIN，也不在缺少 property 時使用預設回退。服務 `ACT_PF_SYNC_KEY` 仍需至少 32 字元，與工作人員 PIN 分開管理。
+
+使用者指定 PIN 的實際 Google property 保存仍待擁有者完成；離線測試成功不代表線上已設定。設定後應重新登入正式頁核對，不把實際 PIN 或同步金鑰寫入文件／Git。
+
+## 已核對的正式程序狀態
+
+- 已安裝 worker 與來源 SHA256 均為 `B2B890EA8B25118EF07BCFB9B185E90639392ACD294331AB60D5A5B8EE993D25`；Startup 捷徑與僅本 worker 的重新啟動已核對。
+- 最新實際健康輪次為 20:11:43 至 20:11:46（Asia/Taipei）：errorCode=null，exported/imported/rejected/pending 均為 0。這是該輪結果，不是所有歷史累計。
+- 手機穩定版正規化 SHA256 為 `105b5988fb196dd5759a9f121fd394b60ed2ea037bf91357b09986e2349e2157`。原問卷 PF 卡片核對成功，不需要為此額外創建 PF。
+- 可選 readonly view3 已停止擴充並封存候選，未實作到正式版、未發布，不屬於目前正式能力。
