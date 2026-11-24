@@ -2,7 +2,7 @@
 
 這是獨立的同步工作程序。臨床資料只透過執行中的 Overlay HTTP API 存取；它不直接開啟 DuckDB、DBF 或 HIS 檔案，也不需要重新啟動 Overlay、Tray 或 TK Panel。
 
-截至 2026-11-24 20:14（Asia/Taipei），正式程式內容維持已驗證的 `c18de5b`。Google 第 10 版已發布、release 為 `2026-11-24-pf-history2`；手機原問卷 PF 顯示與 worker 正常健康輪次已核對；使用者於 20:14 再次確認原卡片日期是今天。指定管理 PIN 尚未由擁有者實際保存確認，最後驗證仍為 AUTH_FAILED；舊有已配置 PIN 可登入。請依下方安裝、核對與停止步驟操作。程式已發布、worker 正常、指定 PIN 已設定是三個獨立狀態。
+截至 2026-11-24 20:17:53（Asia/Taipei），正式程式內容維持已驗證的 `c18de5b`，Google 第 10 版為 `2026-11-24-pf-history2`。使用者本人已保存指定管理 PIN，正式登入／查詢成功；原問卷附帶 PF 與今天日期均相符。worker 程序、Startup 捷徑及最新正常健康輪次已核對。請依下方安裝、核對與停止步驟維護；文件與前端不包含實際 PIN 或同步金鑰。
 
 ## 資料方向
 
@@ -102,11 +102,13 @@ node --test tests/backend-pf.cjs tests/backend-history-contract.cjs tests/fronte
 
 正式 `2026-11-24-pf-history2` 接受 `ACT_NURSE_PIN` 明確配置的至少 4 字元、非全空白管理 PIN；前端不包含 PIN，也不在缺少 property 時使用預設回退。服務 `ACT_PF_SYNC_KEY` 仍需至少 32 字元，與工作人員 PIN 分開管理。
 
-使用者指定 PIN 的實際 Google property 保存仍待擁有者完成；離線測試成功不代表線上已設定。設定後應重新登入正式頁核對，不把實際 PIN 或同步金鑰寫入文件／Git。
+使用者已於 20:17:51 本人保存指定管理 PIN，正式查詢回覆成功。後續若變更設定，仍須在正式頁核對登入；不把實際 PIN 或同步金鑰寫入文件／Git。
 
 ## 已核對的正式程序狀態
 
 - 已安裝 worker 與來源 SHA256 均為 `B2B890EA8B25118EF07BCFB9B185E90639392ACD294331AB60D5A5B8EE993D25`；Startup 捷徑與僅本 worker 的重新啟動已核對。
-- 最新實際健康輪次為 20:11:43 至 20:11:46（Asia/Taipei）：errorCode=null，exported/imported/rejected/pending 均為 0。這是該輪結果，不是所有歷史累計。
+- 最新實際健康輪次為 20:17:51 至 20:17:53（Asia/Taipei）：errorCode=null，exported/imported/rejected/pending 均為 0。這是該輪結果，不是所有歷史累計。
+- 已確認程序的執行 script 路徑正確，Startup 捷徑存在。
+- 指定管理 PIN 正式 nurse_history 查詢成功；原問卷附帶 PF 與日期相符，獨立 PF 清單為空屬預期，不需要額外新增量測。
 - 手機穩定版正規化 SHA256 為 `105b5988fb196dd5759a9f121fd394b60ed2ea037bf91357b09986e2349e2157`。原問卷 PF 卡片核對成功，不需要為此額外創建 PF。
 - 可選 readonly view3 已停止擴充並封存候選，未實作到正式版、未發布，不屬於目前正式能力。
