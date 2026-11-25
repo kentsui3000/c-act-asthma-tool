@@ -19,7 +19,7 @@
  */
 
 var ACT_PF_API_VERSION = 2;
-var ACT_PF_RELEASE = '2026-11-24-pf-history2';
+var ACT_PF_RELEASE = '2026-11-25-pf-workflow1';
 // Urgent compatibility fallback. This legacy PIN has appeared in public source;
 // it is not strong authentication. Set ACT_NURSE_PIN in Script Properties to
 // rotate it without publishing a new client-side credential.
@@ -497,6 +497,60 @@ function historyActChart_(row) {
   return chart && idChart && chart !== idChart ? '' : chart || idChart;
 }
 
+/** Time fallback only: current ACT A:P has no verified encounter/session field. */
+function historySessionTimestamp_(value) {
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+  var text = String(value == null ? '' : value).trim();
+  var zoned = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/i.exec(text);
+  var local = zoned ? null : /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(text);
+  var fields = zoned || local;
+  // A date without a clock is unknown, not an invented midnight session.
+  if (!fields || Number(fields[4]) > 23 || Number(fields[5]) > 59 || Number(fields[6] || 0) > 59) return null;
+  var day = fields[1] + '-' + ('0' + fields[2]).slice(-2) + '-' + ('0' + fields[3]).slice(-2);
+  var calendar = new Date(day + 'T00:00:00Z');
+  if (isNaN(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== day) return null;
+  var parsed = zoned ? new Date(text) : new Date(day + 'T' + ('0' + fields[4]).slice(-2) + ':' + fields[5] + ':' + (fields[6] || '00') + '+08:00');
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function historySession_(value, source) {
+  var date = historySessionTimestamp_(value);
+  if (!date) return { clinicSession: 'unassigned', sessionSource: 'not_available', sessionFallback: false };
+  var clock = Utilities.formatDate(date, 'Asia/Taipei', 'HH:mm:ss');
+  if (!/^\d{2}:\d{2}:\d{2}$/.test(clock)) {
+    return { clinicSession: 'unassigned', sessionSource: 'not_available', sessionFallback: false };
+  }
+  var minutes = Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+  var session = minutes >= 480 && minutes < 930 ? 'S' :
+    minutes >= 930 && minutes < 1110 ? 'T' : minutes >= 1110 && minutes < 1410 ? 'U' : 'unassigned';
+  return { clinicSession: session, sessionSource: source,
+    sessionFallback: source === 'questionnaire_timestamp' || source === 'linked_questionnaire_timestamp' };
+}
+
+function historyActIdentity_(row) {
+  return historyHash_(JSON.stringify(row.slice(0, 15).map(historyCellText_)));
+}
+
+function historyLinkedAct_(record, actRows) {
+  if (!record.linkedActIdentity) return null;
+  var matches = actRows.slice(1).filter(function(row) {
+    return historyActIdentity_(row) === record.linkedActIdentity;
+  });
+  if (matches.length !== 1 || historyActChart_(matches[0]) !== record.chartNumber ||
+      taipeiRecordDate_(matches[0][0]) !== record.assessmentDate) return null;
+  return matches[0];
+}
+
+function historyPFSession_(record, actRows) {
+  // Back-entry/receipt time is not a measurement or visit time.
+  if (record.measuredAt && taipeiRecordDate_(record.measuredAt) === record.assessmentDate) {
+    return historySession_(record.measuredAt, 'measurement_timestamp');
+  }
+  var linked = historyLinkedAct_(record, actRows);
+  if (linked) return historySession_(linked[0], 'linked_questionnaire_timestamp');
+  return { clinicSession: 'unassigned', sessionSource: 'not_available', sessionFallback: false };
+}
+
 function historySnapshotVersion_(act, events, actRows, pfRows) {
   return historyHash_(JSON.stringify([
     act.slice(0, actRows).map(function(row) { return row.slice(0, 16).map(historyCellText_); }),
@@ -528,6 +582,10 @@ function historyCursor_(text, query, act, events) {
 
 function handleNurseHistory_(params) {
   requireHistorySecret_(params, false);
+  var clinicSession = String(params.clinicSession || 'all');
+  if (['all', 'S', 'T', 'U', 'unassigned'].indexOf(clinicSession) < 0) {
+    throw pfError_('INVALID_CLINIC_SESSION', '請選擇全部、早診、午診、晚診或未分診次。', false);
+  }
   var chart = historyChart_(params.chartNumber, true);
   var today = historyToday_();
   var weekAgo = new Date(today + 'T00:00:00+08:00');
@@ -536,13 +594,13 @@ function handleNurseHistory_(params) {
   var end = historyDate_(params.endDate || today);
   var days = (new Date(end + 'T00:00:00Z') - new Date(start + 'T00:00:00Z')) / 86400000 + 1;
   if (days < 1 || days > 31) throw pfError_('DATE_RANGE_TOO_LARGE', '每次請查詢 1–31 天。', false);
-  if (!chart && (start !== today || end !== today)) {
-    throw pfError_('CHART_REQUIRED_FOR_HISTORY', '查詢過去紀錄時請先輸入病歷號。', false);
+  if (!chart && start !== end) {
+    throw pfError_('CHART_REQUIRED_FOR_HISTORY', '查詢多日紀錄時請先輸入病歷號；單日可不填。', false);
   }
   var limit = historyInteger_(params.limit, 100, 1, 200);
   var act = nurseSheet_().getDataRange().getValues();
   var events = historyRegistry_(false).getDataRange().getValues();
-  var snapshot = historyCursor_(params.cursor, historyHash_(chart + '|' + start + '|' + end), act, events);
+  var snapshot = historyCursor_(params.cursor, historyHash_(chart + '|' + start + '|' + end + '|' + clinicSession), act, events);
   var cursor = snapshot.offset;
   var items = [], invalidTimestampCount = 0;
   for (var i = 1; i < snapshot.actRows; i++) {
@@ -553,18 +611,26 @@ function handleNurseHistory_(params) {
     if (!date) { invalidTimestampCount++; continue; }
     if (date < start || date > end) continue;
     var timestamp = historyCellText_(act[i][0]);
+    var actSession = historySession_(act[i][0], 'questionnaire_timestamp');
+    if (clinicSession !== 'all' && actSession.clinicSession !== clinicSession) continue;
     items.push({ kind: 'ACT', rowIndex: i + 1, rowKey: nurseRowKey_(i + 1, act[i]),
-      stableKey: historyHash_(JSON.stringify(act[i].slice(0, 15).map(historyCellText_))),
+      stableKey: historyActIdentity_(act[i]),
       name: act[i][3] || '', chart: act[i][2] || '', chartNumber: actChart,
       testType: act[i][6] || '', score: act[i][7] == null ? '' : act[i][7],
       level: act[i][8] || '', levelKey: act[i][9] || '', peakFlow: act[i][15] == null ? '' : act[i][15],
-      assessmentDate: date, recordedAt: timestamp, timestamp: timestamp });
+      assessmentDate: date, recordedAt: timestamp, timestamp: timestamp,
+      clinicSession: actSession.clinicSession, sessionSource: actSession.sessionSource, sessionFallback: actSession.sessionFallback });
   }
   for (var j = 1; j < snapshot.pfRows; j++) {
     if (!events[j][0]) continue;
     var event = historyRecord_(j + 1, events[j]);
     if (chart && event.chartNumber !== chart) continue;
     if (event.assessmentDate < start || event.assessmentDate > end) continue;
+    var pfSession = historyPFSession_(event, act.slice(0, snapshot.actRows));
+    event.clinicSession = pfSession.clinicSession;
+    event.sessionSource = pfSession.sessionSource;
+    event.sessionFallback = pfSession.sessionFallback;
+    if (clinicSession !== 'all' && event.clinicSession !== clinicSession) continue;
     event.kind = 'PF'; items.push(event);
   }
   items.sort(function(a, b) {
@@ -574,7 +640,7 @@ function handleNurseHistory_(params) {
   var page = items.slice(cursor, cursor + limit);
   var more = cursor + limit < items.length;
   snapshot.offset = cursor + limit;
-  return { ok: true, apiVersion: ACT_PF_API_VERSION, startDate: start, endDate: end, chartNumber: chart,
+  return { ok: true, apiVersion: ACT_PF_API_VERSION, startDate: start, endDate: end, chartNumber: chart, clinicSession: clinicSession,
     rows: page.filter(function(item) { return item.kind === 'ACT'; }),
     pfRecords: page.filter(function(item) { return item.kind === 'PF'; }),
     nextCursor: more ? 'v1.' + encodeURIComponent(JSON.stringify(snapshot)) : null, hasMore: more, invalidTimestampCount: invalidTimestampCount };
@@ -629,6 +695,11 @@ function historyWriteEvent_(params, source, qaSheet) {
       if (String(data[i][0]) !== event.eventId) continue;
       if (String(data[i][14]) !== payloadHash) throw pfError_('IDEMPOTENCY_CONFLICT', '同一事件識別的內容不同，未新增或覆寫資料。', false);
       return { ok: true, apiVersion: ACT_PF_API_VERSION, duplicate: true, record: historyRecord_(i + 1, data[i]) };
+    }
+    // Validate only new events: saved retries retain their original acknowledgment
+    // even if the selected questionnaire changes or disappears afterwards.
+    if (event.linkedActIdentity && !historyLinkedAct_(event, nurseSheet_().getDataRange().getValues())) {
+      throw pfError_('ACT_LINK_CHANGED', '原選擇的測驗已變更或不再唯一，請重新選擇病患。', false);
     }
     if (source === 'mobile_pf' && params.confirmAdditional !== 'yes') {
       var exists = data.slice(1).some(function(row) {

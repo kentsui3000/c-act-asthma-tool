@@ -75,7 +75,9 @@ function harness(options = {}) {
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' }, getUuid: () => crypto.randomUUID(),
       computeDigest: (algorithm, text) => [...crypto.createHash(algorithm).update(text).digest()],
-      formatDate: date => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+      formatDate: (date, zone, pattern) => pattern === 'HH:mm:ss' ?
+        new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(date) :
+        new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
     },
     ContentService: { MimeType: { JSON: 'json', TEXT: 'text' }, createTextOutput: text => ({ text, setMimeType() { return this; } }) }
   };
@@ -95,7 +97,7 @@ if (require.main === module) {
 test('history release is exact, both copies match, and no new MailApp scope', () => {
   assert.equal(source, fs.readFileSync(path.join(root, 'c-act-asthma-tool', 'GoogleAppsScript-Code.gs'), 'utf8'));
   const h = harness(); const health = JSON.parse(h.ctx.doGet({ parameter: { mode: 'health' } }).text);
-  assert.equal(health.release, '2026-11-24-pf-history2'); assert.doesNotMatch(source, /\bMailApp\s*\./);
+  assert.equal(health.release, h.ctx.ACT_PF_RELEASE); assert.doesNotMatch(source, /\bMailApp\s*\./);
 });
 
 test('all new modes reject missing, blank, or too-short explicit credentials', () => {
@@ -139,7 +141,7 @@ test('exact chart normalization, Taipei midnight, and zero ACT score are preserv
   assert.equal(h.history({ chartNumber: '0035292' }).rows.length, 2); assert.equal(h.writes.length, 0);
 });
 
-test('history defaults today or last seven days and requires exact chart for past dates', () => {
+test('history defaults today or last seven days and requires exact chart for multi-day dates', () => {
   const h = harness();
   const today = h.post('nurse_history'); assert.equal(today.startDate, '2026-11-24'); assert.equal(today.endDate, '2026-11-24');
   const week = h.post('nurse_history', { chartNumber: '35292' }); assert.equal(week.startDate, '2026-11-18');
